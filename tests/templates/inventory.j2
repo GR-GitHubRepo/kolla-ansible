@@ -2,32 +2,32 @@
 # additional groups are for more control of the environment.
 [control]
 {% for host in hostvars %}
-{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_become=true ansible_user={{ hostvars[host]['ansible_user'] }}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=kolla ansible_ssh_private_key_file={{ ansible_env.HOME ~ '/.ssh/id_rsa_kolla' }}
 {% endfor %}
 
 [network]
 {% for host in hostvars %}
-{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_become=true ansible_user={{ hostvars[host]['ansible_user'] }}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=kolla ansible_ssh_private_key_file={{ ansible_env.HOME ~ '/.ssh/id_rsa_kolla' }}
 {% endfor %}
 
 [compute]
 {% for host in hostvars %}
-{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_become=true ansible_user={{ hostvars[host]['ansible_user'] }}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=kolla ansible_ssh_private_key_file={{ ansible_env.HOME ~ '/.ssh/id_rsa_kolla' }}
 {% endfor %}
 
 [storage]
 {% for host in hostvars %}
-{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_become=true ansible_user={{ hostvars[host]['ansible_user'] }}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=kolla ansible_ssh_private_key_file={{ ansible_env.HOME ~ '/.ssh/id_rsa_kolla' }} ceph_osd_store_type={{ 'filestore' if host == 'primary' else 'bluestore' }}
 {% endfor %}
 
 [monitoring]
 {% for host in hostvars %}
-{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_become=true ansible_user={{ hostvars[host]['ansible_user'] }}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=kolla ansible_ssh_private_key_file={{ ansible_env.HOME ~ '/.ssh/id_rsa_kolla' }}
 {% endfor %}
 
 [deployment]
 {% for host in hostvars %}
-{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_become=true ansible_user={{ hostvars[host]['ansible_user'] }}
+{{ host }} ansible_host={{ hostvars[host]['ansible_host'] }} ansible_user=kolla ansible_ssh_private_key_file={{ ansible_env.HOME ~ '/.ssh/id_rsa_kolla' }}
 {% endfor %}
 
 # You can explicitly specify which hosts run each project by updating the
@@ -52,7 +52,6 @@ monitoring
 
 [etcd:children]
 control
-compute
 
 [karbor:children]
 control
@@ -227,6 +226,9 @@ control
 [bifrost:children]
 deployment
 
+[zookeeper:children]
+control
+
 [zun:children]
 control
 
@@ -245,9 +247,6 @@ control
 
 # Glance
 [glance-api:children]
-glance
-
-[glance-registry:children]
 glance
 
 # Nova
@@ -298,6 +297,12 @@ neutron
 neutron
 
 [neutron-infoblox-ipam-agent:children]
+neutron
+
+[neutron-metering-agent:children]
+neutron
+
+[ironic-neutron-agent:children]
 neutron
 
 # Ceph
@@ -471,6 +476,9 @@ mistral
 [mistral-engine:children]
 mistral
 
+[mistral-event-engine:children]
+mistral
+
 # Aodh
 [aodh-api:children]
 aodh
@@ -596,6 +604,9 @@ placement
 [zun-api:children]
 zun
 
+[zun-wsproxy:children]
+zun
+
 [zun-compute:children]
 compute
 
@@ -624,9 +635,6 @@ vitrage
 [vitrage-graph:children]
 vitrage
 
-[vitrage-collector:children]
-vitrage
-
 [vitrage-ml:children]
 vitrage
 
@@ -650,3 +658,6 @@ control
 compute
 network
 storage
+
+[prometheus-openstack-exporter:children]
+monitoring

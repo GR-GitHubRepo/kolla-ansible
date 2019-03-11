@@ -37,7 +37,7 @@ copy_logs() {
     ps -eo user,pid,ppid,lwp,%cpu,%mem,size,rss,cmd > ${LOG_DIR}/system_logs/ps.txt
 
     # docker related information
-    (docker info && docker images && docker ps -a) > ${LOG_DIR}/system_logs/docker-info.txt
+    (docker info && docker images && docker ps -a && docker network ls) > ${LOG_DIR}/system_logs/docker-info.txt
 
     # ceph related logs
     if [[ $(docker ps --filter name=ceph_mon --format "{{.Names}}") ]]; then
@@ -46,8 +46,24 @@ copy_logs() {
         docker exec ceph_mon ceph osd tree > ${LOG_DIR}/kolla/ceph/ceph_osd_tree.txt
     fi
 
+    # bifrost related logs
+    if [[ $(docker ps --filter name=bifrost_deploy --format "{{.Names}}") ]]; then
+        for service in dnsmasq ironic-api ironic-conductor ironic-inspector mariadb nginx rabbitmq-server; do
+            mkdir -p ${LOG_DIR}/kolla/$service
+            docker exec bifrost_deploy systemctl status $service > ${LOG_DIR}/kolla/$service/systemd-status-$service.txt
+        done
+        docker exec bifrost_deploy journalctl -u mariadb > ${LOG_DIR}/kolla/mariadb/mariadb.txt
+        docker exec bifrost_deploy journalctl -u rabbitmq-server > ${LOG_DIR}/kolla/rabbitmq-server/rabbitmq.txt
+    fi
+
+    # haproxy related logs
+    if [[ $(docker ps --filter name=haproxy --format "{{.Names}}") ]]; then
+        mkdir -p ${LOG_DIR}/kolla/haproxy
+        docker exec haproxy bash -c 'echo show stat | socat stdio /var/lib/kolla/haproxy/haproxy.sock' > ${LOG_DIR}/kolla/haproxy/stats.txt
+    fi
+
     for container in $(docker ps -a --format "{{.Names}}"); do
-        docker logs --tail all ${container} > ${LOG_DIR}/docker_logs/${container}.txt
+        docker logs --tail all ${container} &> ${LOG_DIR}/docker_logs/${container}.txt
     done
 
     # Rename files to .txt; this is so that when displayed via

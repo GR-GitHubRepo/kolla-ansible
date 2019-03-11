@@ -12,6 +12,21 @@
     - item.value.enabled | bool
   with_dict: "{{ cinder_services }}"
 
+- include_tasks: ceph.yml
+  when:
+    - (enable_ceph | bool) and (cinder_backend_ceph | bool)
+    - inventory_hostname in groups['ceph-mon'] or
+        inventory_hostname in groups['cinder-api'] or
+        inventory_hostname in groups['cinder-volume'] or
+        inventory_hostname in groups['cinder-scheduler'] or
+        inventory_hostname in groups['cinder-backup']
+
+- include_tasks: external_ceph.yml
+  when:
+    - (enable_ceph | bool == False) and (cinder_backend_ceph | bool)
+    - inventory_hostname in groups['cinder-volume'] or
+      inventory_hostname in groups['cinder-backup']
+
 - name: Check if policies shall be overwritten
   local_action: stat path="{{ item }}"
   run_once: True
@@ -49,6 +64,7 @@
 - name: Copying over cinder-wsgi.conf
   vars:
     service: "{{ cinder_services['cinder-api'] }}"
+  become: true
   template:
     src: "{{ item }}"
     dest: "{{ node_config_directory }}/cinder-api/cinder-wsgi.conf"
@@ -88,11 +104,13 @@
     - Restart cinder-backup container
 
 - name: Copying over existing policy file
+  become: true
   template:
     src: "{{ cinder_policy_file_path }}"
     dest: "{{ node_config_directory }}/{{ item.key }}/{{ cinder_policy_file }}"
   register: cinder_policy_overwriting
   when:
+    - item.value.enabled | bool
     - cinder_policy_file is defined
     - inventory_hostname in groups[item.value.group]
   with_dict: "{{ cinder_services }}"
@@ -103,6 +121,7 @@
     - Restart cinder-backup container
 
 - name: Copying over nfs_shares files for cinder_volume
+  become: true
   template:
     src: "{{ item }}"
     dest: "{{ node_config_directory }}/cinder-volume/nfs_shares"
@@ -127,6 +146,7 @@
     name: "{{ item.value.container_name }}"
     image: "{{ item.value.image }}"
     volumes: "{{ item.value.volumes | reject('equalto', '') | list }}"
+    dimensions: "{{ item.value.dimensions }}"
     privileged: "{{ item.value.privileged | default(False) }}"
     ipc_mode: "{{ item.value.ipc_mode | default('') }}"
   register: check_cinder_containers

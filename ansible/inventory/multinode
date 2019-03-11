@@ -15,22 +15,8 @@ control03
 network01
 network02
 
-# inner-compute is the groups of compute nodes which do not have
-# external reachability.
-# DEPRECATED, the group will be removed in S release of OpenStack,
-# use variable neutron_compute_dvr_mode instead.
-[inner-compute]
-
-# external-compute is the groups of compute nodes which can reach
-# outside.
-# DEPRECATED, the group will be removed in S release of OpenStack,
-# use variable neutron_compute_dvr_mode instead.
-[external-compute]
+[compute]
 compute01
-
-[compute:children]
-inner-compute
-external-compute
 
 [monitoring]
 monitoring01
@@ -73,7 +59,6 @@ monitoring
 
 [etcd:children]
 control
-compute
 
 [influxdb:children]
 monitoring
@@ -125,7 +110,17 @@ control
 [qdrouterd:children]
 control
 
+[monasca-agent:children]
+compute
+control
+monitoring
+network
+storage
+
 [monasca:children]
+monitoring
+
+[storm:children]
 monitoring
 
 [mongodb:children]
@@ -280,9 +275,6 @@ control
 [glance-api:children]
 glance
 
-[glance-registry:children]
-glance
-
 # Nova
 [nova-api:children]
 nova
@@ -328,6 +320,12 @@ neutron
 neutron
 
 [neutron-infoblox-ipam-agent:children]
+neutron
+
+[neutron-metering-agent:children]
+neutron
+
+[ironic-neutron-agent:children]
 neutron
 
 # Ceph
@@ -449,11 +447,48 @@ murano
 murano
 
 # Monasca
+[monasca-agent-collector:children]
+monasca-agent
+
+[monasca-agent-forwarder:children]
+monasca-agent
+
+[monasca-agent-statsd:children]
+monasca-agent
+
 [monasca-api:children]
+monasca
+
+[monasca-grafana:children]
 monasca
 
 [monasca-log-api:children]
 monasca
+
+[monasca-log-transformer:children]
+monasca
+
+[monasca-log-persister:children]
+monasca
+
+[monasca-log-metrics:children]
+monasca
+
+[monasca-thresh:children]
+monasca
+
+[monasca-notification:children]
+monasca
+
+[monasca-persister:children]
+monasca
+
+# Storm
+[storm-worker:children]
+storm
+
+[storm-nimbus:children]
+storm
 
 # Ironic
 [ironic-api:children]
@@ -498,6 +533,12 @@ solum
 [solum-conductor:children]
 solum
 
+[solum-application-deployment:children]
+solum
+
+[solum-image-builder:children]
+solum
+
 # Mistral
 [mistral-api:children]
 mistral
@@ -506,6 +547,9 @@ mistral
 mistral
 
 [mistral-engine:children]
+mistral
+
+[mistral-event-engine:children]
 mistral
 
 # Ceilometer
@@ -637,6 +681,9 @@ placement
 [zun-api:children]
 zun
 
+[zun-wsproxy:children]
+zun
+
 [zun-compute:children]
 compute
 
@@ -663,9 +710,6 @@ vitrage
 vitrage
 
 [vitrage-graph:children]
-vitrage
-
-[vitrage-collector:children]
 vitrage
 
 [vitrage-ml:children]
@@ -701,3 +745,9 @@ control
 compute
 network
 storage
+
+[prometheus-alertmanager:children]
+monitoring
+
+[prometheus-openstack-exporter:children]
+monitoring

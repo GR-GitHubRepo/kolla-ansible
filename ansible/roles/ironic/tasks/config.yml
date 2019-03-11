@@ -1,4 +1,11 @@
 ---
+- name: Load and persist iscsi_tcp module
+  import_role:
+    role: module-load
+  vars:
+    modules:
+      - {'name': iscsi_tcp}
+
 - name: Ensuring config directories exist
   file:
     path: "{{ node_config_directory }}/{{ item.key }}"
@@ -260,6 +267,7 @@
     privileged: "{{ item.value.privileged|default(False) }}"
     cap_add: "{{ item.value.cap_add|default([]) }}"
     volumes: "{{ item.value.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_ironic_containers
   when:
     - kolla_action != "config"

@@ -8,7 +8,7 @@
 - name: Checking free port for Neutron Server
   wait_for:
     host: "{{ api_interface_address }}"
-    port: "{{ neutron_server_port }}"
+    port: "{{ neutron_server_listen_port }}"
     connect_timeout: 1
     timeout: 1
     state: stopped
@@ -48,12 +48,10 @@
   run_once: true
   with_items: "{{ tenant_network_types }}"
 
-- name: Checking for deprecated inner- and external-compute groups
-  local_action:
-    module: debug
-    msg: "WARNING: inner- and external-compute groups are DEPRECATED"
+- name: Checking whether Ironic enabled
+  local_action: fail msg="Ironic must be enabled when using networking-baremetal/ironic-neutron-agent"
   changed_when: false
   run_once: True
   when:
-    - (groups['inner-compute'] | default([]) | length > 0
-       or groups['external-compute'] | default([]) | length > 0)
+    - enable_ironic_neutron_agent | bool
+    - not (enable_ironic | bool)

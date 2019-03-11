@@ -18,6 +18,7 @@ driver = kuryr
 
 [oslo_messaging_notifications]
 transport_url = {{ notify_transport_url }}
+driver = messaging
 
 [api]
 host_ip = {{ api_interface_address }}
@@ -37,8 +38,8 @@ service_type = container
 service_name = zun
 
 [keystone_auth]
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+auth_uri = {{ keystone_internal_url }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 project_domain_id = {{ default_project_domain_id }}
 user_domain_id = {{ default_user_domain_id }}
@@ -51,8 +52,8 @@ memcache_secret_key = {{ memcache_secret_key }}
 memcached_servers = {% for host in groups['memcached'] %}{{ hostvars[host]['ansible_' + hostvars[host]['api_interface']]['ipv4']['address'] }}:{{ memcached_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 [keystone_authtoken]
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+www_authenticate_uri = {{ keystone_internal_url }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 project_domain_id = {{ default_project_domain_id }}
 user_domain_id = {{ default_user_domain_id }}
@@ -66,8 +67,8 @@ memcache_secret_key = {{ memcache_secret_key }}
 memcached_servers = {% for host in groups['memcached'] %}{{ hostvars[host]['ansible_' + hostvars[host]['api_interface']]['ipv4']['address'] }}:{{ memcached_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 [glance_client]
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+auth_uri = {{ keystone_internal_url }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 project_domain_id = {{ default_project_domain_id }}
 user_domain_id = {{ default_user_domain_id }}
@@ -78,8 +79,8 @@ region_name = {{ openstack_region_name }}
 endpoint_type = internalURL
 
 [neutron_client]
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+auth_uri = {{ keystone_internal_url }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 project_domain_id = {{ default_project_domain_id }}
 user_domain_id = {{ default_user_domain_id }}
@@ -104,3 +105,12 @@ lock_path = /var/lib/zun/tmp
 [oslo_policy]
 policy_file = {{ zun_policy_file }}
 {% endif %}
+
+[websocket_proxy]
+wsproxy_host = {{ api_interface_address }}
+wsproxy_port = {{ zun_wsproxy_port }}
+base_url = ws://{{ kolla_external_fqdn }}:{{ zun_wsproxy_port }}
+
+[docker]
+docker_remote_api_version = 1.24
+api_url = tcp://{{ api_interface_address }}:2375

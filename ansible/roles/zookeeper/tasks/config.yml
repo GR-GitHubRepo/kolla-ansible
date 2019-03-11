@@ -6,7 +6,6 @@
     owner: "{{ config_owner_user }}"
     group: "{{ config_owner_group }}"
     mode: "0770"
-    recurse: yes
   become: true
   when:
     - inventory_hostname in groups[item.value.group]
@@ -67,6 +66,7 @@
     image: "{{ item.value.image }}"
     volumes: "{{ item.value.volumes }}"
     environment: "{{ item.value.environment }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_zookeeper_containers
   when:
     - kolla_action != "config"

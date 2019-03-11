@@ -12,6 +12,20 @@ senlin_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
       - "{{ kolla_dev_repos_directory ~ '/senlin/senlin:/var/lib/kolla/venv/lib/python2.7/site-packages/senlin' if senlin_dev_mode | bool else '' }}"
+    dimensions: "{{ senlin_api_dimensions }}"
+    haproxy:
+      senlin_api:
+        enabled: "{{ enable_senlin }}"
+        mode: "http"
+        external: false
+        port: "{{ senlin_api_port }}"
+        listen_port: "{{ senlin_api_listen_port }}"
+      senlin_api_external:
+        enabled: "{{ enable_senlin }}"
+        mode: "http"
+        external: true
+        port: "{{ senlin_api_port }}"
+        listen_port: "{{ senlin_api_listen_port }}"
   senlin-engine:
     container_name: senlin_engine
     group: senlin-engine
@@ -22,6 +36,7 @@ senlin_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
       - "{{ kolla_dev_repos_directory ~ '/senlin/senlin:/var/lib/kolla/venv/lib/python2.7/site-packages/senlin' if senlin_dev_mode | bool else '' }}"
+    dimensions: "{{ senlin_engine_dimensions }}"
 
 ####################
 # Database
@@ -45,13 +60,16 @@ senlin_api_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ dock
 senlin_api_tag: "{{ senlin_tag }}"
 senlin_api_image_full: "{{ senlin_api_image }}:{{ senlin_api_tag }}"
 
+senlin_api_dimensions: "{{ default_container_dimensions }}"
+senlin_engine_dimensions: "{{ default_container_dimensions }}"
+
 
 ####################
 # OpenStack
 ####################
-senlin_admin_endpoint: "{{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ senlin_api_port }}"
-senlin_internal_endpoint: "{{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ senlin_api_port }}"
-senlin_public_endpoint: "{{ public_protocol }}://{{ kolla_external_fqdn }}:{{ senlin_api_port }}"
+senlin_admin_endpoint: "{{ admin_protocol }}://{{ senlin_internal_fqdn }}:{{ senlin_api_port }}"
+senlin_internal_endpoint: "{{ internal_protocol }}://{{ senlin_internal_fqdn }}:{{ senlin_api_port }}"
+senlin_public_endpoint: "{{ public_protocol }}://{{ senlin_external_fqdn }}:{{ senlin_api_port }}"
 
 senlin_logging_debug: "{{ openstack_logging_debug }}"
 
@@ -66,3 +84,4 @@ openstack_senlin_auth: "{{ openstack_auth }}"
 senlin_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 senlin_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 senlin_dev_mode: "{{ kolla_dev_mode }}"
+senlin_source_version: "{{ kolla_source_version }}"

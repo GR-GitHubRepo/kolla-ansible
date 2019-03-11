@@ -12,6 +12,18 @@ tacker_services:
       - "{{ kolla_dev_repos_directory ~ '/tacker/tacker:/var/lib/kolla/venv/lib/python2.7/site-packages/tacker' if tacker_dev_mode | bool else '' }}"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ tacker_server_dimensions }}"
+    haproxy:
+      tacker_server:
+        enabled: "{{ enable_tacker }}"
+        mode: "http"
+        external: false
+        port: "{{ tacker_server_port }}"
+      tacker_server_external:
+        enabled: "{{ enable_tacker }}"
+        mode: "http"
+        external: true
+        port: "{{ tacker_server_port }}"
   tacker-conductor:
     container_name: "tacker_conductor"
     group: "tacker-conductor"
@@ -22,6 +34,7 @@ tacker_services:
       - "{{ kolla_dev_repos_directory ~ '/tacker/tacker:/var/lib/kolla/venv/lib/python2.7/site-packages/tacker' if tacker_dev_mode | bool else '' }}"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ tacker_conductor_dimensions }}"
 
 ####################
 # Database
@@ -44,6 +57,9 @@ tacker_conductor_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{
 tacker_conductor_tag: "{{ tacker_tag }}"
 tacker_conductor_image_full: "{{ tacker_conductor_image }}:{{ tacker_conductor_tag }}"
 
+tacker_server_dimensions: "{{ default_container_dimensions }}"
+tacker_conductor_dimensions: "{{ default_container_dimensions }}"
+
 ####################
 # OpenStack
 ####################
@@ -63,3 +79,4 @@ openstack_tacker_auth: "{{ openstack_auth }}"
 tacker_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 tacker_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 tacker_dev_mode: "{{ kolla_dev_mode }}"
+tacker_source_version: "{{ kolla_source_version }}"

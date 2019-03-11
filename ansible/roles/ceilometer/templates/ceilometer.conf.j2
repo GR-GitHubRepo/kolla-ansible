@@ -5,10 +5,6 @@ log_dir = /var/log/kolla/ceilometer
 
 transport_url = {{ rpc_transport_url }}
 
-{% if enable_aodh | bool %}
-evaluation_interval = 300
-{% endif %}
-
 {% if nova_compute_virt_type == 'vmware' %}
 hypervisor_inspector = vsphere
 {% elif nova_compute_virt_type == 'xenapi' %}
@@ -16,7 +12,7 @@ hypervisor_inspector = xenapi
 {% endif %}
 
 [service_credentials]
-auth_url = {{ internal_protocol  }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}/v3
+auth_url = {{ keystone_internal_url }}/v3
 region_name = {{ openstack_region_name }}
 password = {{ ceilometer_keystone_password }}
 username = {{ ceilometer_keystone_user }}
@@ -51,3 +47,8 @@ connection_url = {{ xenserver_connect_protocol }}://{{ xenserver_himn_ip }}
 connection_username = {{ xenserver_username }}
 connection_password = {{ xenserver_password }}
 {% endif %}
+
+[cache]
+backend = oslo_cache.memcache_pool
+enabled = True
+memcache_servers = {% for host in groups['memcached'] %}{{ hostvars[host]['ansible_' + hostvars[host]['api_interface']]['ipv4']['address'] }}:{{ memcached_port }}{% if not loop.last %},{% endif %}{% endfor %}

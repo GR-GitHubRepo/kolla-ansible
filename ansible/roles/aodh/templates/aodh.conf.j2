@@ -3,8 +3,7 @@
 auth_strategy = keystone
 log_dir = /var/log/kolla/aodh
 debug = {{ aodh_logging_debug }}
-notification_topics = notifications
-
+evaluation_interval = {{ aodh_evaluation_interval }}
 transport_url = {{ rpc_transport_url }}
 
 [api]
@@ -17,14 +16,14 @@ connection = mysql+pymysql://{{ aodh_database_user }}:{{ aodh_database_password 
 [keystone_authtoken]
 memcache_security_strategy = ENCRYPT
 memcache_secret_key = {{ memcache_secret_key }}
-memcache_servers = {% for host in groups['memcached'] %}{{ hostvars[host]['ansible_' + hostvars[host]['api_interface']]['ipv4']['address'] }}:{{ memcached_port }}{% if not loop.last %},{% endif %}{% endfor %}
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
+memcached_servers = {% for host in groups['memcached'] %}{{ hostvars[host]['ansible_' + hostvars[host]['api_interface']]['ipv4']['address'] }}:{{ memcached_port }}{% if not loop.last %},{% endif %}{% endfor %}
+www_authenticate_uri = {{ keystone_internal_url }}
 project_domain_name = {{ default_project_domain_name }}
 project_name = service
 user_domain_name = {{ default_user_domain_name }}
 username = {{ aodh_keystone_user }}
 password = {{ aodh_keystone_password }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 
 [oslo_middleware]
@@ -36,7 +35,7 @@ policy_file = {{ aodh_policy_file }}
 {% endif %}
 
 [service_credentials]
-auth_url = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}/v3
+auth_url = {{ keystone_internal_url }}/v3
 region_name = {{ openstack_region_name }}
 password = {{ aodh_keystone_password }}
 username = {{ aodh_keystone_user }}
@@ -48,3 +47,10 @@ interface = internal
 
 [oslo_messaging_notifications]
 transport_url = {{ notify_transport_url }}
+{% if aodh_enabled_notification_topics %}
+driver = messagingv2
+topics = {{ aodh_enabled_notification_topics | map(attribute='name') | join(',') }}
+{% else %}
+driver = noop
+{% endif %}
+

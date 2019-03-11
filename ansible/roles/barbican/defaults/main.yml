@@ -13,6 +13,20 @@ barbican_services:
       - "barbican:/var/lib/barbican/"
       - "kolla_logs:/var/log/kolla/"
       - "{{ kolla_dev_repos_directory ~ '/barbican/barbican:/var/lib/kolla/venv/lib/python2.7/site-packages/barbican' if barbican_dev_mode | bool else '' }}"
+    dimensions: "{{ barbican_api_dimensions }}"
+    haproxy:
+      barbican_api:
+        enabled: "{{ enable_barbican }}"
+        mode: "http"
+        external: false
+        port: "{{ barbican_api_port }}"
+        listen_port: "{{ barbican_api_listen_port }}"
+      barbican_api_external:
+        enabled: "{{ enable_barbican }}"
+        mode: "http"
+        external: true
+        port: "{{ barbican_api_port }}"
+        listen_port: "{{ barbican_api_listen_port }}"
   barbican-keystone-listener:
     container_name: barbican_keystone_listener
     group: barbican-keystone-listener
@@ -23,6 +37,7 @@ barbican_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
       - "{{ kolla_dev_repos_directory ~ '/barbican/barbican:/var/lib/kolla/venv/lib/python2.7/site-packages/barbican' if barbican_dev_mode | bool else '' }}"
+    dimensions: "{{ barbican_keystone_listener_dimensions }}"
   barbican-worker:
     container_name: barbican_worker
     group: barbican-worker
@@ -33,6 +48,7 @@ barbican_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
       - "{{ kolla_dev_repos_directory ~ '/barbican/barbican:/var/lib/kolla/venv/lib/python2.7/site-packages/barbican' if barbican_dev_mode | bool else '' }}"
+    dimensions: "{{ barbican_worker_dimensions }}"
 
 
 ####################
@@ -61,13 +77,16 @@ barbican_worker_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{
 barbican_worker_tag: "{{ barbican_tag }}"
 barbican_worker_image_full: "{{ barbican_worker_image }}:{{ barbican_worker_tag }}"
 
+barbican_api_dimensions: "{{ default_container_dimensions }}"
+barbican_keystone_listener_dimensions: "{{ default_container_dimensions }}"
+barbican_worker_dimensions: "{{ default_container_dimensions }}"
 
 ####################
 # OpenStack
 ####################
-barbican_admin_endpoint: "{{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ barbican_api_port }}"
-barbican_internal_endpoint: "{{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ barbican_api_port }}"
-barbican_public_endpoint: "{{ public_protocol }}://{{ kolla_external_fqdn }}:{{ barbican_api_port }}"
+barbican_admin_endpoint: "{{ admin_protocol }}://{{ barbican_internal_fqdn }}:{{ barbican_api_port }}"
+barbican_internal_endpoint: "{{ internal_protocol }}://{{ barbican_internal_fqdn }}:{{ barbican_api_port }}"
+barbican_public_endpoint: "{{ public_protocol }}://{{ barbican_external_fqdn }}:{{ barbican_api_port }}"
 
 barbican_logging_debug: "{{ openstack_logging_debug }}"
 
@@ -86,3 +105,4 @@ openstack_barbican_auth: "{{ openstack_auth }}"
 barbican_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 barbican_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 barbican_dev_mode: "{{ kolla_dev_mode }}"
+barbican_source_version: "{{ kolla_source_version }}"

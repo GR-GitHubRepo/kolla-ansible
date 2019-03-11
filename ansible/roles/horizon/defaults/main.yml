@@ -42,6 +42,27 @@ horizon_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
       - "/tmp:/tmp"
+    dimensions: "{{ horizon_dimensions }}"
+    haproxy:
+      horizon:
+        enabled: "{{ enable_horizon }}"
+        mode: "http"
+        external: false
+        port: "{{ horizon_port }}"
+        frontend_http_extra:
+          - "balance source"
+      horizon_external:
+        enabled: "{{ enable_horizon }}"
+        mode: "http"
+        external: true
+        port: "{% if kolla_enable_tls_external|bool %}443{% else %}{{ horizon_port }}{% endif %}"
+        frontend_http_extra:
+          - "balance source"
+      horizon_external_redirect:
+        enabled: "{{ enable_horizon|bool and kolla_enable_tls_external|bool }}"
+        mode: "redirect"
+        external: true
+        port: "{{ horizon_port }}"
 horizon_keystone_domain_choices:
   Default: default
 
@@ -55,10 +76,12 @@ horizon_database_address: "{{ database_address }}:{{ database_port }}"
 ####################
 # Docker
 ####################
-horizon_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ docker_namespace }}/{{ kolla_base_distro }}-{{ kolla_install_type }}-horizon"
+horizon_install_type: "{{ kolla_install_type }}"
+horizon_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ docker_namespace }}/{{ kolla_base_distro }}-{{ horizon_install_type }}-horizon"
 horizon_tag: "{{ openstack_release }}"
 horizon_image_full: "{{ horizon_image }}:{{ horizon_tag }}"
 
+horizon_dimensions: "{{ default_container_dimensions }}"
 
 ####################
 # OpenStack
@@ -76,3 +99,5 @@ murano_dashboard_git_repository: "{{ kolla_dev_repos_git }}/murano-dashboard"
 horizon_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 horizon_dev_mode: "{{ kolla_dev_mode }}"
 horizon_murano_dev_mode: "{{ kolla_dev_mode }}"
+horizon_source_version: "{{ kolla_source_version }}"
+horizon_murano_source_version: "{{ kolla_source_version }}"

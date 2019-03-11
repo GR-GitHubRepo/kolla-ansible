@@ -12,6 +12,18 @@ heat_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "{{ kolla_dev_repos_directory ~ '/heat/heat:/var/lib/kolla/venv/lib/python2.7/site-packages/heat' if heat_dev_mode | bool else '' }}"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ heat_api_dimensions }}"
+    haproxy:
+      heat_api:
+        enabled: "{{ enable_heat }}"
+        mode: "http"
+        external: false
+        port: "{{ heat_api_port }}"
+      heat_api_external:
+        enabled: "{{ enable_heat }}"
+        mode: "http"
+        external: true
+        port: "{{ heat_api_port }}"
   heat-api-cfn:
     container_name: heat_api_cfn
     group: heat-api-cfn
@@ -22,6 +34,18 @@ heat_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "{{ kolla_dev_repos_directory ~ '/heat/heat:/var/lib/kolla/venv/lib/python2.7/site-packages/heat' if heat_dev_mode | bool else '' }}"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ heat_api_cfn_dimensions }}"
+    haproxy:
+      heat_api_cfn:
+        enabled: "{{ enable_heat }}"
+        mode: "http"
+        external: false
+        port: "{{ heat_api_cfn_port }}"
+      heat_api_cfn_external:
+        enabled: "{{ enable_heat }}"
+        mode: "http"
+        external: true
+        port: "{{ heat_api_cfn_port }}"
   heat-engine:
     container_name: heat_engine
     group: heat-engine
@@ -32,6 +56,7 @@ heat_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "{{ kolla_dev_repos_directory ~ '/heat/heat:/var/lib/kolla/venv/lib/python2.7/site-packages/heat' if heat_dev_mode | bool else '' }}"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ heat_engine_dimensions }}"
 
 ####################
 # Database
@@ -59,6 +84,10 @@ heat_engine_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ doc
 heat_engine_tag: "{{ heat_tag }}"
 heat_engine_image_full: "{{ heat_engine_image }}:{{ heat_engine_tag }}"
 
+heat_api_dimensions: "{{ default_container_dimensions }}"
+heat_api_cfn_dimensions: "{{ default_container_dimensions }}"
+heat_engine_dimensions: "{{ default_container_dimensions }}"
+
 
 ####################
 # OpenStack
@@ -85,3 +114,4 @@ openstack_heat_auth: "{{ openstack_auth }}"
 heat_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 heat_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 heat_dev_mode: "{{ kolla_dev_mode }}"
+heat_source_version: "{{ kolla_source_version }}"

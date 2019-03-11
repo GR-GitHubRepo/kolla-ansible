@@ -121,6 +121,7 @@
   template:
     src: "pipeline.yaml.j2"
     dest: "{{ node_config_directory }}/{{ item.key }}/pipeline.yaml"
+  become: true
   register: ceilometer_pipelines
   when:
     - inventory_hostname in groups[item.value.group]
@@ -195,7 +196,8 @@
     name: "{{ item.value.container_name }}"
     image: "{{ item.value.image }}"
     privileged: "{{ item.value.privileged | default(False) }}"
-    volumes: "{{ item.value.volumes }}"
+    volumes: "{{ item.value.volumes | reject('equalto', '')|list }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_ceilometer_containers
   when:
     - kolla_action != "config"

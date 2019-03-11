@@ -11,6 +11,19 @@ cloudkitty_services:
       - "{{ node_config_directory }}/cloudkitty-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/cloudkitty/cloudkitty:/var/lib/kolla/venv/lib/python2.7/site-packages/cloudkitty' if cloudkitty_dev_mode | bool else '' }}"
+    dimensions: "{{ cloudkitty_api_dimensions }}"
+    haproxy:
+      cloudkitty_api:
+        enabled: "{{ enable_cloudkitty }}"
+        mode: "http"
+        external: false
+        port: "{{ cloudkitty_api_port }}"
+      cloudkitty_api_external:
+        enabled: "{{ enable_cloudkitty }}"
+        mode: "http"
+        external: true
+        port: "{{ cloudkitty_api_port }}"
   cloudkitty-processor:
     container_name: "cloudkitty_processor"
     group: "cloudkitty-processor"
@@ -20,6 +33,8 @@ cloudkitty_services:
       - "{{ node_config_directory }}/cloudkitty-processor/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/cloudkitty/cloudkitty:/var/lib/kolla/venv/lib/python2.7/site-packages/cloudkitty' if cloudkitty_dev_mode | bool else '' }}"
+    dimensions: "{{ cloudkitty_processor_dimensions }}"
 
 
 ####################
@@ -44,6 +59,10 @@ cloudkitty_processor_image: "{{ docker_registry ~ '/' if docker_registry else ''
 cloudkitty_processor_tag: "{{ cloudkitty_tag }}"
 cloudkitty_processor_image_full: "{{ cloudkitty_processor_image }}:{{ cloudkitty_processor_tag }}"
 
+cloudkitty_processor_dimensions: "{{ default_container_dimensions }}"
+cloudkitty_api_dimensions: "{{ default_container_dimensions }}"
+
+
 ####################
 # OpenStack
 ####################
@@ -62,3 +81,12 @@ openstack_cloudkitty_auth: "{{ openstack_auth }}"
 # Cloudkitty
 ####################
 cloudkitty_openstack_keystone_default_role: "rating"
+
+
+####################
+# Kolla
+####################
+cloudkitty_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
+cloudkitty_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
+cloudkitty_dev_mode: "{{ kolla_dev_mode }}"
+cloudkitty_source_version: "{{ kolla_source_version }}"

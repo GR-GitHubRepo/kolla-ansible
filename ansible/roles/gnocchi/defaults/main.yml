@@ -10,8 +10,20 @@ gnocchi_services:
     volumes:
       - "{{ node_config_directory }}/gnocchi-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
-      - "gnocchi:/var/lib/gnocchi/"
+      - "{{ gnocchi_metric_datadir_volume }}:/var/lib/gnocchi/"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ gnocchi_api_dimensions }}"
+    haproxy:
+      gnocchi_api:
+        enabled: "{{ enable_gnocchi }}"
+        mode: "http"
+        external: false
+        port: "{{ gnocchi_api_port }}"
+      gnocchi_api_external:
+        enabled: "{{ enable_gnocchi }}"
+        mode: "http"
+        external: true
+        port: "{{ gnocchi_api_port }}"
   gnocchi-metricd:
     container_name: gnocchi_metricd
     group: gnocchi-metricd
@@ -20,8 +32,9 @@ gnocchi_services:
     volumes:
       - "{{ node_config_directory }}/gnocchi-metricd/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
-      - "gnocchi:/var/lib/gnocchi/"
+      - "{{ gnocchi_metric_datadir_volume }}:/var/lib/gnocchi/"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ gnocchi_metricd_dimensions }}"
   gnocchi-statsd:
     container_name: gnocchi_statsd
     group: gnocchi-statsd
@@ -30,8 +43,9 @@ gnocchi_services:
     volumes:
       - "{{ node_config_directory }}/gnocchi-statsd/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
-      - "gnocchi:/var/lib/gnocchi/"
+      - "{{ gnocchi_metric_datadir_volume }}:/var/lib/gnocchi/"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ gnocchi_statsd_dimensions }}"
 
 
 ####################
@@ -47,6 +61,20 @@ gnocchi_pool_type: "{{ ceph_gnocchi_pool_type }}"
 gnocchi_cache_mode: "{{ ceph_gnocchi_cache_mode }}"
 gnocchi_pool_pg_num: "{{ ceph_pool_pg_num }}"
 gnocchi_pool_pgp_num: "{{ ceph_pool_pgp_num }}"
+
+ceph_client_gnocchi_keyring_caps:
+  mon: 'allow r'
+  osd: >-
+    allow class-read object_prefix rbd_children,
+    allow rwx pool={{ ceph_gnocchi_pool_name }},
+    allow rwx pool={{ ceph_gnocchi_pool_name }}-cache
+
+
+####################
+# Swift
+####################
+swift_keystone_user: "swift"
+swift_admin_tenant_name: "admin"
 
 
 ####################
@@ -74,6 +102,10 @@ gnocchi_statsd_image_full: "{{ gnocchi_statsd_image }}:{{ gnocchi_statsd_tag }}"
 gnocchi_metricd_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ docker_namespace }}/{{ kolla_base_distro }}-{{ gnocchi_install_type }}-gnocchi-metricd"
 gnocchi_metricd_tag: "{{ gnocchi_tag }}"
 gnocchi_metricd_image_full: "{{ gnocchi_metricd_image }}:{{ gnocchi_metricd_tag }}"
+
+gnocchi_api_dimensions: "{{ default_container_dimensions }}"
+gnocchi_metricd_dimensions: "{{ default_container_dimensions }}"
+gnocchi_statsd_dimensions: "{{ default_container_dimensions }}"
 
 ####################
 # OpenStack

@@ -2,9 +2,9 @@
 debug = {{ barbican_logging_debug }}
 log_dir = /var/log/kolla/barbican
 
-bind_port = {{ barbican_api_port }}
+bind_port = {{ barbican_api_listen_port }}
 bind_host = {{ api_interface_address }}
-host_href = {{ public_protocol }}://{{ kolla_external_fqdn }}:{{ barbican_api_port }}
+host_href = {{ public_protocol }}://{{ barbican_external_fqdn }}:{{ barbican_api_port }}
 backlog = 4096
 max_allowed_secret_in_bytes = 10000
 max_allowed_request_size_in_bytes = 1000000
@@ -48,13 +48,13 @@ kek = '{{ barbican_crypto_key }}'
 enable = True
 
 [keystone_authtoken]
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
+www_authenticate_uri = {{ keystone_internal_url }}
 project_domain_id = {{ default_project_domain_id }}
 project_name = service
 user_domain_id = {{ default_user_domain_id }}
 username = {{ barbican_keystone_user }}
 password = {{ barbican_keystone_password }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 
 memcache_security_strategy = ENCRYPT
@@ -62,7 +62,7 @@ memcache_secret_key = {{ memcache_secret_key }}
 memcached_servers = {% for host in groups['memcached'] %}{{ hostvars[host]['ansible_' + hostvars[host]['api_interface']]['ipv4']['address'] }}:{{ memcached_port }}{% if not loop.last %},{% endif %}{% endfor %}
 
 [service_credentials]
-auth_url = {{ internal_protocol  }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
+auth_url = {{ keystone_internal_url }}
 region_name = {{ openstack_region_name }}
 password = {{ barbican_keystone_password }}
 username = {{ barbican_keystone_user }}

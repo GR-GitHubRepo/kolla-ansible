@@ -11,6 +11,18 @@ octavia_services:
       - "{{ node_config_directory }}/octavia-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ octavia_api_dimensions }}"
+    haproxy:
+      octavia_api:
+        enabled: "{{ enable_octavia }}"
+        mode: "http"
+        external: false
+        port: "{{ octavia_api_port }}"
+      octavia_api_external:
+        enabled: "{{ enable_octavia }}"
+        mode: "http"
+        external: true
+        port: "{{ octavia_api_port }}"
   octavia-health-manager:
     container_name: octavia_health_manager
     group: octavia-health-manager
@@ -20,6 +32,7 @@ octavia_services:
       - "{{ node_config_directory }}/octavia-health-manager/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ octavia_health_manager_dimensions }}"
   octavia-housekeeping:
     container_name: octavia_housekeeping
     group: octavia-housekeeping
@@ -29,6 +42,7 @@ octavia_services:
       - "{{ node_config_directory }}/octavia-housekeeping/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ octavia_housekeeping_dimensions }}"
   octavia-worker:
     container_name: octavia_worker
     group: octavia-worker
@@ -38,6 +52,7 @@ octavia_services:
       - "{{ node_config_directory }}/octavia-worker/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ octavia_worker_dimensions }}"
 
 octavia_required_roles:
   - load-balancer_observer
@@ -77,13 +92,18 @@ octavia_worker_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ 
 octavia_worker_tag: "{{ octavia_tag }}"
 octavia_worker_image_full: "{{ octavia_worker_image }}:{{ octavia_worker_tag }}"
 
+octavia_api_dimensions: "{{ default_container_dimensions }}"
+octavia_health_manager_dimensions: "{{ default_container_dimensions }}"
+octavia_housekeeping_dimensions: "{{ default_container_dimensions }}"
+octavia_worker_dimensions: "{{ default_container_dimensions }}"
+
 
 ####################
 # OpenStack
 ####################
-octavia_admin_endpoint: "{{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ octavia_api_port }}"
-octavia_internal_endpoint: "{{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ octavia_api_port }}"
-octavia_public_endpoint: "{{ public_protocol }}://{{ kolla_external_fqdn }}:{{ octavia_api_port }}"
+octavia_admin_endpoint: "{{ admin_protocol }}://{{ octavia_internal_fqdn }}:{{ octavia_api_port }}"
+octavia_internal_endpoint: "{{ internal_protocol }}://{{ octavia_internal_fqdn }}:{{ octavia_api_port }}"
+octavia_public_endpoint: "{{ public_protocol }}://{{ octavia_external_fqdn }}:{{ octavia_api_port }}"
 
 octavia_logging_debug: "{{ openstack_logging_debug }}"
 

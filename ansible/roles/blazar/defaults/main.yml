@@ -11,6 +11,19 @@ blazar_services:
       - "{{ node_config_directory }}/blazar-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/blazar/blazar:/var/lib/kolla/venv/lib/python2.7/site-packages/blazar' if blazar_dev_mode | bool else '' }}"
+    dimensions: "{{ blazar_api_dimensions }}"
+    haproxy:
+      blazar_api:
+        enabled: "{{ enable_blazar }}"
+        mode: "http"
+        external: false
+        port: "{{ blazar_api_port }}"
+      blazar_api_external:
+        enabled: "{{ enable_blazar }}"
+        mode: "http"
+        external: true
+        port: "{{ blazar_api_port }}"
   blazar-manager:
     container_name: blazar_manager
     group: blazar-manager
@@ -20,6 +33,9 @@ blazar_services:
       - "{{ node_config_directory }}/blazar-manager/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/blazar/blazar:/var/lib/kolla/venv/lib/python2.7/site-packages/blazar' if blazar_dev_mode | bool else '' }}"
+    dimensions: "{{ blazar_manager_dimensions }}"
+
 
 ####################
 # Blazar
@@ -48,6 +64,8 @@ blazar_api_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ dock
 blazar_api_tag: "{{ blazar_tag }}"
 blazar_api_image_full: "{{ blazar_api_image }}:{{ blazar_api_tag }}"
 
+blazar_api_dimensions: "{{ default_container_dimensions }}"
+blazar_manager_dimensions: "{{ default_container_dimensions }}"
 
 ####################
 # OpenStack
@@ -61,3 +79,12 @@ blazar_logging_debug: "{{ openstack_logging_debug }}"
 blazar_keystone_user: "blazar"
 
 openstack_blazar_auth: "{{ openstack_auth }}"
+
+
+#####################
+## Kolla
+#####################
+blazar_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
+blazar_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
+blazar_dev_mode: "{{ kolla_dev_mode }}"
+blazar_source_version: "{{ kolla_source_version }}"

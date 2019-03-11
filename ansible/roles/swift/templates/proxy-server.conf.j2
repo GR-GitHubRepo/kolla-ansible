@@ -1,12 +1,12 @@
 [DEFAULT]
 bind_ip = {{ api_interface_address }}
-bind_port = {{ swift_proxy_server_port }}
+bind_port = {{ swift_proxy_server_listen_port }}
 
 log_udp_host = {{ syslog_server }}
 log_udp_port = {{ syslog_udp_port }}
 log_name = {{ service_name }}
 log_facility = {{ syslog_swift_facility }}
-log_level = INFO
+log_level = {{ swift_log_level }}
 workers = {{ openstack_service_workers }}
 
 [pipeline:main]
@@ -35,14 +35,15 @@ use = egg:swift#proxy_logging
 
 [filter:authtoken]
 paste.filter_factory = keystonemiddleware.auth_token:filter_factory
-auth_uri = {{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_public_port }}
-auth_url = {{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ keystone_admin_port }}
+auth_uri = {{ keystone_internal_url }}
+auth_url = {{ keystone_admin_url }}
 auth_type = password
 project_domain_id = {{ default_project_domain_id }}
 user_domain_id = {{ default_user_domain_id }}
 project_name = service
 username = {{ swift_keystone_user }}
 password = {{ swift_keystone_password }}
+delay_auth_decision = {{ swift_delay_auth_decision }}
 
 memcache_security_strategy = ENCRYPT
 memcache_secret_key = {{ memcache_secret_key }}

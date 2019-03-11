@@ -11,6 +11,19 @@ manila_services:
       - "{{ node_config_directory }}/manila-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/manila/manila:/var/lib/kolla/venv/lib/python2.7/site-packages/manila' if manila_dev_mode | bool else '' }}"
+    dimensions: "{{ manila_api_dimensions }}"
+    haproxy:
+      manila_api:
+        enabled: "{{ enable_manila }}"
+        mode: "http"
+        external: false
+        port: "{{ manila_api_port }}"
+      manila_api_external:
+        enabled: "{{ enable_manila }}"
+        mode: "http"
+        external: true
+        port: "{{ manila_api_port }}"
   manila-scheduler:
     container_name: "manila_scheduler"
     group: "manila-scheduler"
@@ -20,6 +33,8 @@ manila_services:
       - "{{ node_config_directory }}/manila-scheduler/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/manila/manila:/var/lib/kolla/venv/lib/python2.7/site-packages/manila' if manila_dev_mode | bool else '' }}"
+    dimensions: "{{ manila_scheduler_dimensions }}"
   manila-share:
     container_name: "manila_share"
     group: "manila-share"
@@ -31,6 +46,9 @@ manila_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "/run/:/run/:shared"
       - "kolla_logs:/var/log/kolla/"
+      - "/lib/modules:/lib/modules:ro"
+      - "{{ kolla_dev_repos_directory ~ '/manila/manila:/var/lib/kolla/venv/lib/python2.7/site-packages/manila' if manila_dev_mode | bool else '' }}"
+    dimensions: "{{ manila_share_dimensions }}"
   manila-data:
     container_name: "manila_data"
     group: "manila-data"
@@ -42,6 +60,23 @@ manila_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "/run/:/run/:shared"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/manila/manila:/var/lib/kolla/venv/lib/python2.7/site-packages/manila' if manila_dev_mode | bool else '' }}"
+    dimensions: "{{ manila_data_dimensions }}"
+
+
+#####################
+## Ceph
+#####################
+
+ceph_client_manila_keyring_caps:
+  mon: >-
+    allow r,
+    allow command "auth del",
+    allow command "auth caps",
+    allow command "auth get",
+    allow command "auth get-or-create"
+  osd: 'allow rw'
+  mds: 'allow *'
 
 
 #####################
@@ -73,6 +108,11 @@ manila_api_image_full: "{{ manila_api_image }}:{{ manila_api_tag }}"
 manila_data_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ docker_namespace }}/{{ kolla_base_distro }}-{{ manila_install_type }}-manila-data"
 manila_data_tag: "{{ manila_tag }}"
 manila_data_image_full: "{{ manila_data_image }}:{{ manila_data_tag }}"
+
+manila_share_dimensions: "{{ default_container_dimensions }}"
+manila_scheduler_dimensions: "{{ default_container_dimensions }}"
+manila_api_dimensions: "{{ default_container_dimensions }}"
+manila_data_dimensions: "{{ default_container_dimensions }}"
 
 
 #####################
@@ -123,3 +163,12 @@ manila_backends:
       - "CIFS"
 
 manila_enabled_backends: "{{ manila_backends|selectattr('enabled', 'equalto', true)|list }}"
+
+
+####################
+# Kolla
+####################
+manila_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
+manila_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
+manila_dev_mode: "{{ kolla_dev_mode }}"
+manila_source_version: "{{ kolla_source_version }}"

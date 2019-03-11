@@ -1,55 +1,4 @@
 ---
-- name: Restart nova-ssh container
-  vars:
-    service_name: "nova-ssh"
-    service: "{{ nova_services[service_name] }}"
-    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    nova_ssh_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
-  become: true
-  kolla_docker:
-    action: "recreate_or_restart_container"
-    common_options: "{{ docker_common_options }}"
-    name: "{{ service.container_name }}"
-    image: "{{ service.image }}"
-    pid_mode: "{{ service.pid_mode | default('') }}"
-    privileged: "{{ service.privileged | default(False) }}"
-    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
-  when:
-    - kolla_action != "config"
-    - inventory_hostname in groups[service.group]
-    - service.enabled | bool
-    - config_json.changed | bool
-      or nova_ssh_confs.changed | bool
-      or nova_ssh_container.changed | bool
-
-- name: Restart nova-libvirt container
-  vars:
-    service_name: "nova-libvirt"
-    service: "{{ nova_services[service_name] }}"
-    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    nova_libvirt_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
-  become: true
-  kolla_docker:
-    action: "recreate_or_restart_container"
-    common_options: "{{ docker_common_options }}"
-    name: "{{ service.container_name }}"
-    image: "{{ service.image }}"
-    pid_mode: "{{ service.pid_mode | default('') }}"
-    privileged: "{{ service.privileged | default(False) }}"
-    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
-  register: restart_nova_libvirt
-  # NOTE(Jeffrey4l): retry 5 to remove nova_libvirt container because when
-  # guests running, nova_libvirt will raise error even though it is removed.
-  retries: 5
-  until: restart_nova_libvirt | success
-  when:
-    - kolla_action != "config"
-    - inventory_hostname in groups[service.group]
-    - service.enabled | bool
-    - config_json.changed | bool
-      or nova_libvirt_confs.changed | bool
-      or nova_libvirt_container.changed | bool
-
 - name: Restart placement-api container
   vars:
     service_name: "placement-api"
@@ -65,6 +14,7 @@
     name: "{{ service.container_name }}"
     image: "{{ service.image }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -74,56 +24,6 @@
       or policy_overwriting.changed | bool
       or placement_api_wsgi_conf | changed
       or placement_api_container.changed | bool
-
-- name: Restart nova-api container
-  vars:
-    service_name: "nova-api"
-    service: "{{ nova_services[service_name] }}"
-    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    nova_conf: "{{ nova_confs.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    policy_overwriting: "{{ nova_policy_overwriting.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    nova_api_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
-  become: true
-  kolla_docker:
-    action: "recreate_or_restart_container"
-    common_options: "{{ docker_common_options }}"
-    name: "{{ service.container_name }}"
-    image: "{{ service.image }}"
-    privileged: "{{ service.privileged | default(False) }}"
-    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
-  when:
-    - kolla_action != "config"
-    - inventory_hostname in groups[service.group]
-    - service.enabled | bool
-    - config_json.changed | bool
-      or nova_conf.changed | bool
-      or policy_overwriting.changed | bool
-      or nova_api_container.changed | bool
-
-- name: Restart nova-scheduler container
-  vars:
-    service_name: "nova-scheduler"
-    service: "{{ nova_services[service_name] }}"
-    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    nova_conf: "{{ nova_confs.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    policy_overwriting: "{{ nova_policy_overwriting.results|selectattr('item.key', 'equalto', service_name)|first }}"
-    nova_scheduler_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
-  become: true
-  kolla_docker:
-    action: "recreate_or_restart_container"
-    common_options: "{{ docker_common_options }}"
-    name: "{{ service.container_name }}"
-    image: "{{ service.image }}"
-    privileged: "{{ service.privileged | default(False) }}"
-    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
-  when:
-    - kolla_action != "config"
-    - inventory_hostname in groups[service.group]
-    - service.enabled | bool
-    - config_json.changed | bool
-      or nova_conf.changed | bool
-      or policy_overwriting.changed | bool
-      or nova_scheduler_container.changed | bool
 
 - name: Restart nova-conductor container
   vars:
@@ -141,6 +41,7 @@
     image: "{{ service.image }}"
     privileged: "{{ service.privileged | default(False) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -150,6 +51,86 @@
       or policy_overwriting.changed | bool
       or nova_conductor_container.changed | bool
 
+- name: Restart nova-ssh container
+  vars:
+    service_name: "nova-ssh"
+    service: "{{ nova_services[service_name] }}"
+    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    nova_ssh_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
+  become: true
+  kolla_docker:
+    action: "recreate_or_restart_container"
+    common_options: "{{ docker_common_options }}"
+    name: "{{ service.container_name }}"
+    image: "{{ service.image }}"
+    pid_mode: "{{ service.pid_mode | default('') }}"
+    privileged: "{{ service.privileged | default(False) }}"
+    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
+  when:
+    - kolla_action != "config"
+    - inventory_hostname in groups[service.group]
+    - service.enabled | bool
+    - config_json.changed | bool
+      or nova_ssh_confs.changed | bool
+      or nova_ssh_container.changed | bool
+
+- name: Restart nova-libvirt container
+  vars:
+    service_name: "nova-libvirt"
+    service: "{{ nova_services[service_name] }}"
+    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    ceph_conf: "{{ ceph_confs.results|selectattr('item', 'equalto', service_name)|first if ceph_confs is defined else none }}"
+    nova_libvirt_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
+  become: true
+  kolla_docker:
+    action: "recreate_or_restart_container"
+    common_options: "{{ docker_common_options }}"
+    name: "{{ service.container_name }}"
+    image: "{{ service.image }}"
+    pid_mode: "{{ service.pid_mode | default('') }}"
+    privileged: "{{ service.privileged | default(False) }}"
+    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
+  register: restart_nova_libvirt
+  # NOTE(Jeffrey4l): retry 5 to remove nova_libvirt container because when
+  # guests running, nova_libvirt will raise error even though it is removed.
+  retries: 5
+  until: restart_nova_libvirt is success
+  when:
+    - kolla_action != "config"
+    - inventory_hostname in groups[service.group]
+    - service.enabled | bool
+    - config_json.changed | bool
+      or nova_libvirt_confs.changed | bool
+      or nova_libvirt_container.changed | bool
+      or ( ceph_conf is not none and ceph_conf.changed | bool )
+
+- name: Restart nova-scheduler container
+  vars:
+    service_name: "nova-scheduler"
+    service: "{{ nova_services[service_name] }}"
+    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    nova_conf: "{{ nova_confs.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    policy_overwriting: "{{ nova_policy_overwriting.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    nova_scheduler_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
+  become: true
+  kolla_docker:
+    action: "recreate_or_restart_container"
+    common_options: "{{ docker_common_options }}"
+    name: "{{ service.container_name }}"
+    image: "{{ service.image }}"
+    privileged: "{{ service.privileged | default(False) }}"
+    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
+  when:
+    - kolla_action != "config"
+    - inventory_hostname in groups[service.group]
+    - service.enabled | bool
+    - config_json.changed | bool
+      or nova_conf.changed | bool
+      or policy_overwriting.changed | bool
+      or nova_scheduler_container.changed | bool
 
 - name: Restart nova-consoleauth container
   vars:
@@ -167,6 +148,7 @@
     image: "{{ service.image }}"
     privileged: "{{ service.privileged | default(False) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -192,6 +174,7 @@
     image: "{{ service.image }}"
     privileged: "{{ service.privileged | default(False) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -217,6 +200,7 @@
     image: "{{ service.image }}"
     privileged: "{{ service.privileged | default(False) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -242,6 +226,7 @@
     image: "{{ service.image }}"
     privileged: "{{ service.privileged | default(False) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -251,12 +236,39 @@
       or policy_overwriting.changed | bool
       or nova_serialproxy_container.changed | bool
 
+- name: Restart nova-api container
+  vars:
+    service_name: "nova-api"
+    service: "{{ nova_services[service_name] }}"
+    config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    nova_conf: "{{ nova_confs.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    policy_overwriting: "{{ nova_policy_overwriting.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    nova_api_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
+  become: true
+  kolla_docker:
+    action: "recreate_or_restart_container"
+    common_options: "{{ docker_common_options }}"
+    name: "{{ service.container_name }}"
+    image: "{{ service.image }}"
+    privileged: "{{ service.privileged | default(False) }}"
+    volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
+  when:
+    - kolla_action != "config"
+    - inventory_hostname in groups[service.group]
+    - service.enabled | bool
+    - config_json.changed | bool
+      or nova_conf.changed | bool
+      or policy_overwriting.changed | bool
+      or nova_api_container.changed | bool
+
 - name: Restart nova-compute container
   vars:
     service_name: "nova-compute"
     service: "{{ nova_services[service_name] }}"
     config_json: "{{ config_jsons.results|selectattr('item.key', 'equalto', service_name)|first }}"
     nova_conf: "{{ nova_confs.results|selectattr('item.key', 'equalto', service_name)|first }}"
+    ceph_conf: "{{ ceph_confs.results|selectattr('item', 'equalto', service_name)|first if ceph_confs is defined else none }}"
     policy_overwriting: "{{ nova_policy_overwriting.results|selectattr('item.key', 'equalto', service_name)|first }}"
     nova_compute_container: "{{ check_nova_containers.results|selectattr('item.key', 'equalto', service_name)|first }}"
   become: true
@@ -269,6 +281,7 @@
     privileged: "{{ service.privileged | default(False) }}"
     ipc_mode: "{{ service.ipc_mode | default(omit) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]
@@ -277,7 +290,9 @@
       or nova_conf.changed | bool
       or policy_overwriting.changed | bool
       or vcenter_ca_file | bool
+      or nova_compute_release_file | bool
       or nova_compute_container.changed | bool
+      or ( ceph_conf is not none and ceph_conf.changed | bool )
 
 - name: Restart nova-compute-ironic container
   vars:
@@ -295,6 +310,7 @@
     image: "{{ service.image }}"
     privileged: "{{ service.privileged | default(False) }}"
     volumes: "{{ service.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[service.group]

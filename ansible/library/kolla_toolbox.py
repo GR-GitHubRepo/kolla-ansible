@@ -14,6 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import docker
+import json
+import re
+
+from ansible.module_utils.basic import AnsibleModule
+
 DOCUMENTATION = '''
 ---
 module: kolla_toolbox
@@ -84,11 +90,6 @@ EXAMPLES = '''
 '''
 
 
-import docker
-import json
-import re
-
-
 JSON_REG = re.compile('^(?P<host>\w+) \| (?P<status>\w+)!? =>(?P<stdout>.*)$',
                       re.MULTILINE | re.DOTALL)
 NON_JSON_REG = re.compile(('^(?P<host>\w+) \| (?P<status>\w+)!? \| '
@@ -120,7 +121,7 @@ def get_docker_client():
 
 def main():
     specs = dict(
-        module_name=dict(type='str'),
+        module_name=dict(required=True, type='str'),
         module_args=dict(type='str'),
         module_extra_vars=dict(type='json'),
         api_version=dict(required=False, type='str', default='auto'),
@@ -158,6 +159,5 @@ def main():
     module.exit_json(**ret)
 
 
-from ansible.module_utils.basic import *  # noqa
 if __name__ == "__main__":
     main()

@@ -5,8 +5,8 @@
   with_items:
     - { name: "net.bridge.bridge-nf-call-iptables", value: 1}
     - { name: "net.bridge.bridge-nf-call-ip6tables", value: 1}
-    - { name: "net.ipv4.conf.all.rp_filter", value: 0}
-    - { name: "net.ipv4.conf.default.rp_filter", value: 0}
+    - { name: "net.ipv4.conf.all.rp_filter", value: "{{ nova_compute_host_rp_filter_mode }}"}
+    - { name: "net.ipv4.conf.default.rp_filter", value: "{{ nova_compute_host_rp_filter_mode }}"}
   when:
     - set_sysctl | bool
     - inventory_hostname in groups['compute']
@@ -23,6 +23,22 @@
     - inventory_hostname in groups[item.value.group]
     - item.value.enabled | bool
   with_dict: "{{ nova_services }}"
+
+- include_tasks: ceph.yml
+  when:
+    - enable_ceph | bool and nova_backend == "rbd"
+    - inventory_hostname in groups['ceph-mon'] or
+        inventory_hostname in groups['compute'] or
+        inventory_hostname in groups['nova-api'] or
+        inventory_hostname in groups['nova-conductor'] or
+        inventory_hostname in groups['nova-consoleauth'] or
+        inventory_hostname in groups['nova-novncproxy'] or
+        inventory_hostname in groups['nova-scheduler']
+
+- include_tasks: external_ceph.yml
+  when:
+    - not enable_ceph | bool and (nova_backend == "rbd" or cinder_backend_ceph | bool)
+    - inventory_hostname in groups['compute']
 
 - name: Check if policies shall be overwritten
   local_action: stat path="{{ item }}"
@@ -162,6 +178,25 @@
   notify:
     - Restart nova-compute container
 
+- name: Copying 'release' file for nova_compute
+  vars:
+    service: "{{ nova_services['nova-compute'] }}"
+  copy:
+    src: "{{ item }}"
+    dest: "{{ node_config_directory }}/nova-compute/release"
+  with_first_found:
+    - files:
+        - "{{ node_custom_config }}/nova_compute/{{ inventory_hostname }}/release"
+        - "{{ node_custom_config }}/nova_compute/release"
+        - "{{ node_custom_config }}/nova/release"
+      skip: true
+  register: nova_compute_release_file
+  when:
+    - inventory_hostname in groups[service.group]
+    - service.enabled | bool
+  notify:
+    - Restart nova-compute container
+
 - name: Copying over existing policy file
   become: true
   vars:
@@ -202,6 +237,7 @@
     ipc_mode: "{{ item.value.ipc_mode|default(omit) }}"
     privileged: "{{ item.value.privileged|default(False) }}"
     volumes: "{{ item.value.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_nova_containers
   when:
     - kolla_action != "config"

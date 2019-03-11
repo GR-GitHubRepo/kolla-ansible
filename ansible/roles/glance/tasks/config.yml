@@ -1,14 +1,4 @@
 ---
-- include: ceph.yml
-  when:
-    - enable_ceph | bool
-    - glance_backend_ceph | bool
-
-- include: external_ceph.yml
-  when:
-    - enable_ceph | bool == False
-    - glance_backend_ceph | bool
-
 - name: Ensuring config directories exist
   file:
     path: "{{ node_config_directory }}/{{ item.key }}"
@@ -21,6 +11,16 @@
     - inventory_hostname in groups[item.value.group]
     - item.value.enabled | bool
   with_dict: "{{ glance_services }}"
+
+- include_tasks: ceph.yml
+  when:
+    - enable_ceph | bool
+    - glance_backend_ceph | bool
+
+- include_tasks: external_ceph.yml
+  when:
+    - enable_ceph | bool == False
+    - glance_backend_ceph | bool
 
 - name: Check if policies shall be overwritten
   local_action: stat path="{{ item }}"
@@ -52,7 +52,6 @@
   with_dict: "{{ glance_services }}"
   notify:
     - Restart glance-api container
-    - Restart glance-registry container
 
 - name: Copying over glance-*.conf
   vars:
@@ -74,7 +73,26 @@
   with_dict: "{{ glance_services }}"
   notify:
     - Restart glance-api container
-    - Restart glance-registry container
+
+- name: Copying over glance-cache.conf for glance_api
+  vars:
+    glance_api: "{{ glance_services['glance-api'] }}"
+  merge_configs:
+    sources:
+      - "{{ role_path }}/templates/glance-cache.conf.j2"
+      - "{{ node_custom_config }}/glance-cache.conf"
+      - "{{ node_custom_config }}/glance/glance-cache.conf"
+      - "{{ node_custom_config }}/glance/{{ inventory_hostname }}/glance-cache.conf"
+    dest: "{{ node_config_directory }}/glance-api/glance-cache.conf"
+    mode: "0660"
+  become: true
+  register: glance_cache_conf
+  when:
+    - glance_api.enabled | bool
+    - inventory_hostname in groups[glance_api.group]
+    - enable_glance_image_cache | bool
+  notify:
+    - Restart glance-api container
 
 - name: Copying over glance-swift.conf for glance_api
   vars:
@@ -106,10 +124,10 @@
   when:
     - glance_policy_file is defined
     - inventory_hostname in groups[item.value.group]
+    - item.value.enabled | bool
   with_dict: "{{ glance_services }}"
   notify:
     - Restart glance-api container
-    - Restart glance-registry container
 
 - name: Check glance containers
   become: true
@@ -118,7 +136,9 @@
     common_options: "{{ docker_common_options }}"
     name: "{{ item.value.container_name }}"
     image: "{{ item.value.image }}"
+    environment: "{{ item.value.environment | default(omit) }}"
     volumes: "{{ item.value.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_glance_containers
   when:
     - kolla_action != "config"
@@ -127,4 +147,3 @@
   with_dict: "{{ glance_services }}"
   notify:
     - Restart glance-api container
-    - Restart glance-registry container

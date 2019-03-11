@@ -13,6 +13,18 @@ sahara_services:
       - "sahara:/var/lib/sahara/"
       - "kolla_logs:/var/log/kolla/"
       - "{{ kolla_dev_repos_directory ~ '/sahara/sahara:/var/lib/kolla/venv/lib/python2.7/site-packages/sahara' if sahara_dev_mode | bool else '' }}"
+    dimensions: "{{ sahara_api_dimensions }}"
+    haproxy:
+      sahara_api:
+        enabled: "{{ enable_sahara }}"
+        mode: "http"
+        external: false
+        port: "{{ sahara_api_port }}"
+      sahara_api_external:
+        enabled: "{{ enable_sahara }}"
+        mode: "http"
+        external: true
+        port: "{{ sahara_api_port }}"
   sahara-engine:
     container_name: sahara_engine
     group: sahara-engine
@@ -26,6 +38,7 @@ sahara_services:
       - "kolla_logs:/var/log/kolla/"
       - "/run:/run:shared"
       - "{{ kolla_dev_repos_directory ~ '/sahara/sahara:/var/lib/kolla/venv/lib/python2.7/site-packages/sahara' if sahara_dev_mode | bool else '' }}"
+    dimensions: "{{ sahara_engine_dimensions }}"
 
 
 ####################
@@ -50,13 +63,15 @@ sahara_api_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ dock
 sahara_api_tag: "{{ sahara_tag }}"
 sahara_api_image_full: "{{ sahara_api_image }}:{{ sahara_api_tag }}"
 
+sahara_api_dimensions: "{{ default_container_dimensions }}"
+sahara_engine_dimensions: "{{ default_container_dimensions }}"
 
 ####################
 # OpenStack
 ####################
-sahara_admin_endpoint: "{{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ sahara_api_port }}/v1.1/%(tenant_id)s"
-sahara_internal_endpoint: "{{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ sahara_api_port }}/v1.1/%(tenant_id)s"
-sahara_public_endpoint: "{{ public_protocol }}://{{ kolla_external_fqdn }}:{{ sahara_api_port }}/v1.1/%(tenant_id)s"
+sahara_admin_endpoint: "{{ admin_protocol }}://{{ kolla_internal_fqdn }}:{{ sahara_api_port }}"
+sahara_internal_endpoint: "{{ internal_protocol }}://{{ kolla_internal_fqdn }}:{{ sahara_api_port }}"
+sahara_public_endpoint: "{{ public_protocol }}://{{ kolla_external_fqdn }}:{{ sahara_api_port }}"
 
 sahara_logging_debug: "{{ openstack_logging_debug }}"
 
@@ -71,3 +86,4 @@ openstack_sahara_auth: "{{ openstack_auth }}"
 sahara_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 sahara_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 sahara_dev_mode: "{{ kolla_dev_mode }}"
+sahara_source_version: "{{ kolla_source_version }}"

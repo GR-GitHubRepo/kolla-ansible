@@ -8,20 +8,33 @@ murano_services:
     enabled: true
     image: "{{ murano_api_image_full }}"
     volumes:
-      - "{{ node_config_directory }}/murano-engine/:{{ container_config_directory }}/:ro"
+      - "{{ node_config_directory }}/murano-api/:{{ container_config_directory }}/:ro"
       - "{{ kolla_dev_repos_directory ~ '/murano/murano:/var/lib/kolla/venv/lib/python2.7/site-packages/murano' if murano_dev_mode | bool else '' }}"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ murano_api_dimensions }}"
+    haproxy:
+      murano_api:
+        enabled: "{{ enable_murano }}"
+        mode: "http"
+        external: false
+        port: "{{ murano_api_port }}"
+      murano_api_external:
+        enabled: "{{ enable_murano }}"
+        mode: "http"
+        external: true
+        port: "{{ murano_api_port }}"
   murano-engine:
     container_name: murano_engine
     group: murano-engine
     enabled: true
     image: "{{ murano_engine_image_full }}"
     volumes:
-      - "{{ node_config_directory }}/murano-api/:{{ container_config_directory }}/:ro"
+      - "{{ node_config_directory }}/murano-engine/:{{ container_config_directory }}/:ro"
       - "{{ kolla_dev_repos_directory ~ '/murano/murano:/var/lib/kolla/venv/lib/python2.7/site-packages/murano' if murano_dev_mode | bool else '' }}"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ murano_engine_dimensions }}"
 
 
 ####################
@@ -46,6 +59,9 @@ murano_engine_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ d
 murano_engine_tag: "{{ murano_tag }}"
 murano_engine_image_full: "{{ murano_engine_image }}:{{ murano_engine_tag }}"
 
+murano_api_dimensions: "{{ default_container_dimensions }}"
+murano_engine_dimensions: "{{ default_container_dimensions }}"
+
 
 ####################
 # OpenStack
@@ -66,3 +82,4 @@ murano_agent_timeout: 3600
 murano_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 murano_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 murano_dev_mode: "{{ kolla_dev_mode }}"
+murano_source_version: "{{ kolla_source_version }}"

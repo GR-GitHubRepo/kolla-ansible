@@ -28,8 +28,6 @@ currently running:
 
    docker_registry: 192.168.1.100:5000
 
-.. end
-
 The Kolla community recommends using registry 2.3 or later. To deploy registry
 with version 2.3 or later, do the following:
 
@@ -37,8 +35,6 @@ with version 2.3 or later, do the following:
 
    cd kolla
    tools/start-registry
-
-.. end
 
 The Docker registry can be configured as a pull through cache to proxy the
 official Kolla images hosted in Docker Hub. In order to configure the local
@@ -49,8 +45,6 @@ Docker Hub.
 .. code-block:: console
 
    export REGISTRY_PROXY_REMOTEURL=https://registry-1.docker.io
-
-.. end
 
 .. note::
 
@@ -70,78 +64,17 @@ Configure Docker on all nodes
 
 After starting the registry, it is necessary to instruct Docker that
 it will be communicating with an insecure registry.
-For example, To enable insecure registry communication on CentOS,
-modify the ``/etc/sysconfig/docker`` file to contain the following where
+For example, To enable insecure registry communication,
+modify the ``/etc/docker/daemon.json`` file to contain the following where
 ``192.168.1.100`` is the IP address of the machine where the registry
 is currently running:
 
-.. path /etc/sysconfig/docker
-.. code-block:: ini
+.. path /etc/docker/daemon.json
+.. code-block:: json
 
-   INSECURE_REGISTRY="--insecure-registry 192.168.1.100:5000"
-
-.. end
-
-For Ubuntu, check whether its using upstart or systemd.
-
-.. code-block:: console
-
-   # stat /proc/1/exe
-   File: '/proc/1/exe' -> '/lib/systemd/systemd'
-
-Edit ``/etc/default/docker`` and add the following configuration:
-
-.. path /etc/default/docker
-.. code-block:: ini
-
-   DOCKER_OPTS="--insecure-registry 192.168.1.100:5000"
-
-.. end
-
-If Ubuntu is using systemd, additional settings needs to be configured.
-Copy Docker's systemd unit file to ``/etc/systemd/system/`` directory:
-
-.. code-block:: console
-
-   cp /lib/systemd/system/docker.service /etc/systemd/system/docker.service
-
-.. end
-
-Next, modify ``/etc/systemd/system/docker.service``, add ``environmentFile``
-variable and add ``$DOCKER_OPTS`` to the end of ExecStart in ``[Service]``
-section.
-
-For CentOS:
-
-.. path /etc/systemd/system/docker.service
-.. code-block:: ini
-
-    [Service]
-    MountFlags=shared
-    EnvironmentFile=/etc/sysconfig/docker
-    ExecStart=
-    ExecStart=/usr/bin/docker daemon $INSECURE_REGISTRY
-
-.. end
-
-For Ubuntu:
-
-.. path /etc/systemd/system/docker.service
-.. code-block:: ini
-
-   [Service]
-   MountFlags=shared
-   EnvironmentFile=-/etc/default/docker
-   ExecStart=
-   ExecStart=/usr/bin/docker daemon -H fd:// $DOCKER_OPTS
-
-.. end
-
-.. note::
-
-   If your docker version is >=1.13.0, the ``docker daemon`` should be replaced
-   with ``dockerd``.
-
+   {
+     "insecure-registries" : ["192.168.1.100:5000"]
+   }
 
 Restart Docker by executing the following commands:
 
@@ -149,18 +82,13 @@ For CentOS or Ubuntu with systemd:
 
 .. code-block:: console
 
-   systemctl daemon-reload
    systemctl restart docker
-
-.. end
 
 For Ubuntu with upstart or sysvinit:
 
 .. code-block:: console
 
    service docker restart
-
-.. end
 
 .. _edit-inventory:
 
@@ -194,8 +122,6 @@ controls how ansible interacts with remote hosts.
    control01      ansible_ssh_user=<ssh-username> ansible_become=True ansible_private_key_file=<path/to/private-key-file>
    192.168.122.24 ansible_ssh_user=<ssh-username> ansible_become=True ansible_private_key_file=<path/to/private-key-file>
 
-.. end
-
 .. note::
 
    Additional inventory parameters might be required according to your
@@ -218,8 +144,6 @@ grouped together and changing these around can break your deployment:
 
    [haproxy:children]
    network
-
-.. end
 
 Deploying Kolla
 ===============
@@ -244,8 +168,6 @@ to them:
 
    kolla-ansible prechecks -i <path/to/multinode/inventory/file>
 
-.. end
-
 .. note::
 
    RabbitMQ doesn't work with IP addresses, hence the IP address of
@@ -258,4 +180,3 @@ Run the deployment:
 
    kolla-ansible deploy -i <path/to/multinode/inventory/file>
 
-.. end

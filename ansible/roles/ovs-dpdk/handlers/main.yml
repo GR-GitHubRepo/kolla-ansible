@@ -12,6 +12,7 @@
     name: "{{ service.container_name }}"
     image: "{{ service.image }}"
     volumes: "{{ service.volumes }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - service.enabled | bool
@@ -32,7 +33,7 @@
     service: "{{ ovsdpdk_services[service_name] }}"
   command: docker exec "{{ service.container_name }}" ovs-vsctl --no-wait show
   register: check_result
-  until: check_result | success
+  until: check_result is success
   changed_when: False
   retries: 30
   delay: 2
@@ -49,7 +50,7 @@
        or (enable_manila | bool and inventory_hostname in groups['manila-share'])
        or inventory_hostname in groups['neutron-dhcp-agent']
        or inventory_hostname in groups['neutron-l3-agent']
-       or inventory_hostname in groups['neutron-metadata-agent']
+       or inventory_hostname in groups['neutron-metadata-agent'])
     - ovs_physical_port_policy == 'indexed'
 
 - name: Restart ovsdpdk-vswitchd container
@@ -66,6 +67,7 @@
     image: "{{ service.image }}"
     volumes: "{{ service.volumes }}"
     privileged: "{{ service.privileged | default(True) }}"
+    dimensions: "{{ service.dimensions }}"
   when:
     - kolla_action != "config"
     - service.enabled | bool
@@ -85,7 +87,7 @@
        or (enable_manila | bool and inventory_hostname in groups['manila-share'])
        or inventory_hostname in groups['neutron-dhcp-agent']
        or inventory_hostname in groups['neutron-l3-agent']
-       or inventory_hostname in groups['neutron-metadata-agent']
+       or inventory_hostname in groups['neutron-metadata-agent'])
     - ovs_physical_port_policy == 'named'
 
 - name: wait for dpdk tunnel ip
@@ -102,4 +104,4 @@
        or (enable_manila | bool and inventory_hostname in groups['manila-share'])
        or inventory_hostname in groups['neutron-dhcp-agent']
        or inventory_hostname in groups['neutron-l3-agent']
-       or inventory_hostname in groups['neutron-metadata-agent']
+       or inventory_hostname in groups['neutron-metadata-agent'])

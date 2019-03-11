@@ -4,8 +4,8 @@
     kolla_ansible_src_dir: "src/{{ zuul.project.canonical_hostname }}/openstack/kolla-ansible"
     kolla_ansible_full_src_dir: "{{ zuul.executor.work_root }}/{{ kolla_ansible_src_dir }}"
   tasks:
-    - name: Prepare ceph disks
-      script: "{{ kolla_ansible_full_src_dir }}/tests/setup_ceph_disks.sh"
+    - name: Prepare ceph disks for bluestore and filestore OSD
+      script: "{{ kolla_ansible_full_src_dir }}/tests/setup_ceph_disks.sh {{ hostvars[inventory_hostname]['ceph_osd_storetype'] }}"
       when: scenario == "ceph"
       become: true
 
@@ -62,6 +62,7 @@
         path: "/etc/kolla/config/nova"
         state: "directory"
         mode: 0777
+      when: scenario != "bifrost"
       become: true
       delegate_to: "primary"
 
@@ -69,12 +70,23 @@
       template:
         src: "{{ kolla_ansible_full_src_dir }}/tests/templates/nova-compute-overrides.j2"
         dest: /etc/kolla/config/nova/nova-compute.conf
+      when: scenario != "bifrost"
       delegate_to: "primary"
 
-    - name: copy passwords.yml file
-      copy:
-        src: "{{ kolla_ansible_full_src_dir }}/etc/kolla/passwords.yml"
-        dest: /etc/kolla/passwords.yml
+    - name: ensure bifrost conf overrides dir exists
+      file:
+        path: "/etc/kolla/config/bifrost"
+        state: "directory"
+        mode: 0777
+      when: scenario == "bifrost"
+      become: true
+      delegate_to: "primary"
+
+    - name: generate bifrost DIB config overrides
+      template:
+        src: "{{ kolla_ansible_full_src_dir }}/tests/templates/bifrost-dib-overrides.j2"
+        dest: /etc/kolla/config/bifrost/dib.yml
+      when: scenario == "bifrost"
       delegate_to: "primary"
 
     - name: ensure /etc/docker exists
@@ -86,21 +98,45 @@
 
     - name: create deamon.json for nodepool cache
       vars:
-        infra_dockerhub_mirror: "http://{{ zuul_site_mirror_fqdn }}:8081/registry-1.docker/"
+        infra_dockerhub_mirror: "http://{{ zuul_site_mirror_fqdn }}:8082/"
       template:
         src: "{{ kolla_ansible_full_src_dir }}/tests/templates/docker_daemon.json.j2"
         dest: "/etc/docker/daemon.json"
       become: true
-
 
     - name: install kolla-ansible requirements
       pip:
         requirements: "{{ ansible_env.HOME }}/{{ kolla_ansible_src_dir }}/requirements.txt"
       become: true
 
+    - name: copy passwords.yml file
+      copy:
+        src: "{{ kolla_ansible_full_src_dir }}/etc/kolla/passwords.yml"
+        dest: /etc/kolla/passwords.yml
+
     - name: generate passwords
       shell: "{{ kolla_ansible_src_dir }}/tools/generate_passwords.py"
-      delegate_to: "primary"
+
+    - name: slurp kolla passwords
+      slurp:
+        src: /etc/kolla/passwords.yml
+      register: passwords_yml
+
+    - name: write out kolla SSH private key
+      copy:
+        content: "{{ (passwords_yml.content | b64decode | from_yaml).kolla_ssh_key.private_key }}"
+        dest: ~/.ssh/id_rsa_kolla
+        mode: 0600
+
+    - name: authorise kolla public key for zuul user
+      authorized_key:
+        user: "{{ ansible_env.USER }}"
+        key: "{{ (passwords_yml.content | b64decode | from_yaml).kolla_ssh_key.public_key }}"
+      # Delegate to each host in turn. If more tasks require execution on all
+      # hosts in future, break out into a separate play.
+      with_inventory_hostnames:
+        - all
+      delegate_to: "{{ item }}"
 
     - name: generate ceph config overrides
       template:
@@ -109,19 +145,83 @@
       when: scenario == "ceph"
       delegate_to: "primary"
 
-    - shell:
-        cmd: |
-          set -e
-          set -x
-          export BASE_DISTRO={{ base_distro }}
-          export INSTALL_TYPE={{ install_type }}
-          export NODEPOOL_TARBALLS_MIRROR=http://{{ zuul_site_mirror_fqdn }}:8080/tarballs
-          export BUILD_IMAGE={{ need_build_image }}
-          export KOLLA_SRC_DIR={{ ansible_env.HOME }}/src/git.openstack.org/openstack/kolla
-          export ACTION={{ scenario }}
-
-          tools/setup_gate.sh
+    - name: Run setup_gate.sh script
+      shell:
+        cmd: tools/setup_gate.sh
         executable: /bin/bash
         chdir: "{{ kolla_ansible_src_dir }}"
-      delegate_to: "primary"
-      environment: '{{ zuul | zuul_legacy_vars }}'
+      environment:
+        BASE_DISTRO: "{{ base_distro }}"
+        INSTALL_TYPE: "{{ install_type }}"
+        NODEPOOL_TARBALLS_MIRROR: "http://{{ zuul_site_mirror_fqdn }}:8080/tarballs"
+        BUILD_IMAGE: "{{ need_build_image }}"
+        KOLLA_SRC_DIR: "{{ ansible_env.HOME }}/src/git.openstack.org/openstack/kolla"
+        ACTION: "{{ scenario }}"
+
+    - block:
+        - name: Run deploy.sh script
+          shell:
+            cmd: tests/deploy.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+          environment:
+            ACTION: "{{ scenario }}"
+
+        - name: Run test-openstack.sh script
+          shell:
+            cmd: tests/test-openstack.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+          environment:
+            ACTION: "{{ scenario }}"
+          when: scenario not in ['scenario_nfv']
+
+        - name: Run test-scenario-nfv.sh script
+          shell:
+            cmd: tests/test-scenario-nfv.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+          when: scenario == "scenario_nfv"
+
+        - name: Run reconfigure.sh script
+          shell:
+            cmd: tests/reconfigure.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+          environment:
+            ACTION: "{{ scenario }}"
+
+        - name: Run upgrade.sh script
+          shell:
+            cmd: tests/upgrade.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+          environment:
+            ACTION: "{{ scenario }}"
+      when: scenario != "bifrost"
+
+    - block:
+        - name: Run deploy-bifrost.sh script
+          shell:
+            cmd: tests/deploy-bifrost.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+
+        - name: Run test-bifrost.sh script
+          shell:
+            cmd: tests/test-bifrost.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+
+        - name: Run upgrade-bifrost.sh script
+          shell:
+            cmd: tests/upgrade-bifrost.sh
+            executable: /bin/bash
+            chdir: "{{ kolla_ansible_src_dir }}"
+      when: scenario == "bifrost"
+
+    - name: Run check-failure.sh script
+      shell:
+        cmd: tests/check-failure.sh
+        executable: /bin/bash
+        chdir: "{{ kolla_ansible_src_dir }}"

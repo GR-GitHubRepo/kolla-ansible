@@ -23,6 +23,7 @@ try:
 except ImportError:
     import mock
 from docker import errors as docker_error
+from docker.types import Ulimit
 from oslotest import base
 
 this_dir = os.path.dirname(sys.modules[__name__].__file__)
@@ -44,7 +45,7 @@ class ModuleArgsTest(base.BaseTestCase):
                 choices=['compare_container', 'compare_image', 'create_volume',
                          'get_container_env', 'get_container_state',
                          'pull_image', 'recreate_or_restart_container',
-                         'remove_container', 'remove_volume',
+                         'remove_container', 'remove_image', 'remove_volume',
                          'restart_container', 'start_container',
                          'stop_container']),
             api_version=dict(required=False, type='str', default='auto'),
@@ -52,6 +53,7 @@ class ModuleArgsTest(base.BaseTestCase):
             auth_password=dict(required=False, type='str', no_log=True),
             auth_registry=dict(required=False, type='str'),
             auth_username=dict(required=False, type='str'),
+            command=dict(required=False, type='str'),
             detach=dict(required=False, type='bool', default=True),
             labels=dict(required=False, type='dict', default=dict()),
             name=dict(required=False, type='str'),
@@ -83,7 +85,9 @@ class ModuleArgsTest(base.BaseTestCase):
             tls_key=dict(required=False, type='str'),
             tls_cacert=dict(required=False, type='str'),
             volumes=dict(required=False, type='list'),
-            volumes_from=dict(required=False, type='list')
+            volumes_from=dict(required=False, type='list'),
+            dimensions=dict(required=False, type='dict', default=dict()),
+            tty=dict(required=False, type='bool', default=False),
             )
         required_if = [
             ['action', 'pull_image', ['image']],
@@ -95,6 +99,7 @@ class ModuleArgsTest(base.BaseTestCase):
             ['action', 'get_container_state', ['name']],
             ['action', 'recreate_or_restart_container', ['name']],
             ['action', 'remove_container', ['name']],
+            ['action', 'remove_image', ['image']],
             ['action', 'remove_volume', ['name']],
             ['action', 'restart_container', ['name']],
             ['action', 'stop_container', ['name']]
@@ -111,6 +116,7 @@ class ModuleArgsTest(base.BaseTestCase):
 FAKE_DATA = {
 
     'params': {
+        'command': None,
         'detach': True,
         'environment': {},
         'host_config': {
@@ -130,8 +136,9 @@ FAKE_DATA = {
                    'vendor': 'ubuntuOS'},
         'image': 'myregistrydomain.com:5000/ubuntu:16.04',
         'name': 'test_container',
+        'remove_on_exit': True,
         'volumes': None,
-        'tty': True
+        'tty': False,
     },
 
     'images': [
@@ -191,14 +198,40 @@ class TestContainer(base.BaseTestCase):
         super(TestContainer, self).setUp()
         self.fake_data = copy.deepcopy(FAKE_DATA)
 
-    def test_create_container(self):
+    def test_create_container_without_dimensions(self):
         self.dw = get_DockerWorker(self.fake_data['params'])
         self.dw.dc.create_host_config = mock.MagicMock(
             return_value=self.fake_data['params']['host_config'])
         self.dw.create_container()
         self.assertTrue(self.dw.changed)
+
+    def test_create_container_with_dimensions(self):
+        self.fake_data['params']['dimensions'] = {'blkio_weight': 10}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.dw.dc.create_host_config = mock.MagicMock(
+            return_value=self.fake_data['params']['host_config'])
+        self.dw.create_container()
+        self.assertTrue(self.dw.changed)
+        self.fake_data['params'].pop('dimensions')
+        self.fake_data['params']['host_config']['blkio_weight'] = '10'
+        expected_args = {'command', 'detach', 'environment', 'host_config',
+                         'image', 'labels', 'name', 'tty', 'volumes'}
         self.dw.dc.create_container.assert_called_once_with(
-            **self.fake_data['params'])
+            **{k: self.fake_data['params'][k] for k in expected_args})
+        self.dw.dc.create_host_config.assert_called_with(
+            cap_add=None, network_mode='host', ipc_mode=None,
+            pid_mode=None, volumes_from=None, blkio_weight=10,
+            security_opt=None, privileged=None)
+
+    def test_create_container_wrong_dimensions(self):
+        self.fake_data['params']['dimensions'] = {'random': 10}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.dw.dc.create_host_config = mock.MagicMock(
+            return_value=self.fake_data['params']['host_config'])
+        self.dw.create_container()
+        self.dw.module.exit_json.assert_called_once_with(
+            failed=True, msg=repr("Unsupported dimensions"),
+            unsupported_dimensions=set(['random']))
 
     def test_start_container_without_pull(self):
         self.fake_data['params'].update({'auth_username': 'fake_user',
@@ -267,6 +300,31 @@ class TestContainer(base.BaseTestCase):
         self.assertTrue(self.dw.changed)
         self.dw.dc.start.assert_called_once_with(
             container=self.fake_data['params'].get('name'))
+
+    def test_start_container_no_detach(self):
+        self.fake_data['params'].update({'name': 'my_container',
+                                         'detach': False})
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.dw.dc.images = mock.MagicMock(
+            return_value=self.fake_data['images'])
+        self.dw.dc.containers = mock.MagicMock(side_effect=[
+            [], self.fake_data['containers'], self.fake_data['containers'],
+            self.fake_data['containers']])
+        self.dw.dc.wait = mock.MagicMock(return_value={'StatusCode': 0})
+        self.dw.dc.logs = mock.MagicMock(
+            side_effect=['fake stdout', 'fake stderr'])
+        self.dw.start_container()
+        self.assertTrue(self.dw.changed)
+        name = self.fake_data['params'].get('name')
+        self.dw.dc.wait.assert_called_once_with(name)
+        self.dw.dc.logs.assert_has_calls([
+            mock.call(name, stdout=True, stderr=False),
+            mock.call(name, stdout=False, stderr=True)])
+        self.dw.dc.stop.assert_called_once_with(name, timeout=10)
+        self.dw.dc.remove_container.assert_called_once_with(
+            container=name, force=True)
+        expected = {'rc': 0, 'stdout': 'fake stdout', 'stderr': 'fake stderr'}
+        self.assertEqual(expected, self.dw.result)
 
     def test_stop_container(self):
         self.dw = get_DockerWorker({'name': 'my_container',
@@ -581,6 +639,61 @@ class TestImage(base.BaseTestCase):
             msg="Unknown error message: unexpected error",
             failed=True)
 
+    def test_remove_image(self):
+        self.dw = get_DockerWorker(
+            {'image': 'myregistrydomain.com:5000/ubuntu:16.04',
+             'action': 'remove_image'})
+        self.dw.dc.images.return_value = self.fake_data['images']
+
+        self.dw.remove_image()
+        self.assertTrue(self.dw.changed)
+        self.dw.dc.remove_image.assert_called_once_with(
+            image='myregistrydomain.com:5000/ubuntu:16.04')
+
+    def test_remove_image_not_exists(self):
+        self.dw = get_DockerWorker(
+            {'image': 'myregistrydomain.com:5000/non_existing:16.04',
+             'action': 'remove_image'})
+        self.dw.dc.images.return_value = self.fake_data['images']
+
+        self.dw.remove_image()
+        self.assertFalse(self.dw.changed)
+
+    def test_remove_image_exception_409(self):
+        resp = mock.MagicMock()
+        resp.status_code = 409
+        docker_except = docker_error.APIError('test error', resp)
+        self.dw = get_DockerWorker(
+            {'image': 'myregistrydomain.com:5000/ubuntu:16.04',
+             'action': 'remove_image'})
+        self.dw.dc.images.return_value = self.fake_data['images']
+        self.dw.dc.remove_image.side_effect = docker_except
+
+        self.assertRaises(docker_error.APIError, self.dw.remove_image)
+        self.assertTrue(self.dw.changed)
+        self.dw.module.fail_json.assert_called_once_with(
+            failed=True,
+            msg=("Image 'myregistrydomain.com:5000/ubuntu:16.04' "
+                 "is currently in-use")
+        )
+
+    def test_remove_image_exception_500(self):
+        resp = mock.MagicMock()
+        resp.status_code = 500
+        docker_except = docker_error.APIError('test error', resp)
+        self.dw = get_DockerWorker(
+            {'image': 'myregistrydomain.com:5000/ubuntu:16.04',
+             'action': 'remove_image'})
+        self.dw.dc.images.return_value = self.fake_data['images']
+        self.dw.dc.remove_image.side_effect = docker_except
+
+        self.assertRaises(docker_error.APIError, self.dw.remove_image)
+        self.assertTrue(self.dw.changed)
+        self.dw.module.fail_json.assert_called_once_with(
+            failed=True,
+            msg=("Server error")
+        )
+
 
 class TestVolume(base.BaseTestCase):
 
@@ -785,7 +898,115 @@ class TestAttrComp(base.BaseTestCase):
         self.dw = get_DockerWorker({'state': 'running'})
         self.assertFalse(self.dw.compare_container_state(container_info))
 
+    def test_compare_dimensions_pos(self):
+        self.fake_data['params']['dimensions'] = {
+            'blkio_weight': 10, 'mem_limit': 30}
+        container_info = dict()
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertTrue(self.dw.compare_dimensions(container_info))
+
+    def test_compare_dimensions_neg(self):
+        self.fake_data['params']['dimensions'] = {
+            'blkio_weight': 10}
+        container_info = dict()
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 10,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertFalse(self.dw.compare_dimensions(container_info))
+
+    def test_compare_wrong_dimensions(self):
+        self.fake_data['params']['dimensions'] = {
+            'blki_weight': 0}
+        container_info = dict()
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.dw.compare_dimensions(container_info)
+        self.dw.module.exit_json.assert_called_once_with(
+            failed=True, msg=repr("Unsupported dimensions"),
+            unsupported_dimensions=set(['blki_weight']))
+
+    def test_compare_empty_dimensions(self):
+        self.fake_data['params']['dimensions'] = dict()
+        container_info = dict()
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '1', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertTrue(self.dw.compare_dimensions(container_info))
+
+    def test_compare_dimensions_removed_and_changed(self):
+        self.fake_data['params']['dimensions'] = {
+            'mem_reservation': 10}
+        container_info = dict()
+        # Here mem_limit and mem_reservation are already present
+        # Now we are updating only 'mem_reservation'.
+        # Ideally it should return True stating that the docker
+        # dimensions have been changed.
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 10, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 10,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertTrue(self.dw.compare_dimensions(container_info))
+
+    def test_compare_dimensions_explicit_default(self):
+        self.fake_data['params']['dimensions'] = {
+            'mem_reservation': 0}
+        container_info = dict()
+        # Here mem_limit and mem_reservation are already present
+        # Now we are updating only 'mem_reservation'.
+        # Ideally it should return True stating that the docker
+        # dimensions have been changed.
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertFalse(self.dw.compare_dimensions(container_info))
+
     def test_compare_container_state_pos(self):
         container_info = {'State': dict(Status='running')}
         self.dw = get_DockerWorker({'state': 'exited'})
         self.assertTrue(self.dw.compare_container_state(container_info))
+
+    def test_compare_ulimits_pos(self):
+        self.fake_data['params']['dimensions'] = {
+            'ulimits': {'nofile': {'soft': 131072, 'hard': 131072}}}
+        container_info = dict()
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': []}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertTrue(self.dw.compare_dimensions(container_info))
+
+    def test_compare_ulimits_neg(self):
+        self.fake_data['params']['dimensions'] = {
+            'ulimits': {'nofile': {'soft': 131072, 'hard': 131072}}}
+        ulimits_nofile = Ulimit(name='nofile',
+                                soft=131072, hard=131072)
+        container_info = dict()
+        container_info['HostConfig'] = {
+            'CpuPeriod': 0, 'KernelMemory': 0, 'Memory': 0, 'CpuQuota': 0,
+            'CpusetCpus': '', 'CpuShares': 0, 'BlkioWeight': 0,
+            'CpusetMems': '', 'MemorySwap': 0, 'MemoryReservation': 0,
+            'Ulimits': [ulimits_nofile]}
+        self.dw = get_DockerWorker(self.fake_data['params'])
+        self.assertFalse(self.dw.compare_dimensions(container_info))

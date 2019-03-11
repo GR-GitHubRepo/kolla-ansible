@@ -11,6 +11,8 @@ solum_services:
       - "{{ node_config_directory }}/solum-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/solum/solum:/var/lib/kolla/venv/lib/python2.7/site-packages/solum' if solum_dev_mode | bool else '' }}"
+    dimensions: "{{ solum_api_dimensions }}"
   solum-worker:
     container_name: solum_worker
     group: solum-worker
@@ -20,6 +22,8 @@ solum_services:
       - "{{ node_config_directory }}/solum-worker/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/solum/solum:/var/lib/kolla/venv/lib/python2.7/site-packages/solum' if solum_dev_mode | bool else '' }}"
+    dimensions: "{{ solum_worker_dimensions }}"
   solum-deployer:
     container_name: solum_deployer
     group: solum-deployer
@@ -29,6 +33,33 @@ solum_services:
       - "{{ node_config_directory }}/solum-deployer/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/solum/solum:/var/lib/kolla/venv/lib/python2.7/site-packages/solum' if solum_dev_mode | bool else '' }}"
+    dimensions: "{{ solum_deployer_dimensions }}"
+    haproxy:
+      solum_application_deployment:
+        enabled: "{{ enable_solum }}"
+        mode: "http"
+        external: false
+        port: "{{ solum_application_deployment_port }}"
+        host_group: "solum-application-deployment"
+      solum_application_deployment_external:
+        enabled: "{{ enable_solum }}"
+        mode: "http"
+        external: true
+        port: "{{ solum_application_deployment_port }}"
+        host_group: "solum-application-deployment"
+      solum_image_builder:
+        enabled: "{{ enable_solum }}"
+        mode: "http"
+        external: false
+        port: "{{ solum_image_builder_port }}"
+        host_group: "solum-image-builder"
+      solum_image_builder_external:
+        enabled: "{{ enable_solum }}"
+        mode: "http"
+        external: true
+        port: "{{ solum_image_builder_port }}"
+        host_group: "solum-image-builder"
   solum-conductor:
     container_name: solum_conductor
     group: solum-conductor
@@ -38,7 +69,8 @@ solum_services:
       - "{{ node_config_directory }}/solum-conductor/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
-
+      - "{{ kolla_dev_repos_directory ~ '/solum/solum:/var/lib/kolla/venv/lib/python2.7/site-packages/solum' if solum_dev_mode | bool else '' }}"
+    dimensions: "{{ solum_conductor_dimensions }}"
 
 ####################
 # Database
@@ -70,6 +102,10 @@ solum_api_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{ docke
 solum_api_tag: "{{ solum_tag }}"
 solum_api_image_full: "{{ solum_api_image }}:{{ solum_api_tag }}"
 
+solum_api_dimensions: "{{ default_container_dimensions }}"
+solum_worker_dimensions: "{{ default_container_dimensions }}"
+solum_deployer_dimensions: "{{ default_container_dimensions }}"
+solum_conductor_dimensions: "{{ default_container_dimensions }}"
 
 ####################
 # OpenStack
@@ -87,3 +123,12 @@ solum_logging_debug: "{{ openstack_logging_debug }}"
 solum_keystone_user: "solum"
 
 openstack_solum_auth: "{{ openstack_auth }}"
+
+
+####################
+# Kolla
+####################
+solum_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
+solum_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
+solum_dev_mode: "{{ kolla_dev_mode }}"
+solum_source_version: "{{ kolla_source_version }}"

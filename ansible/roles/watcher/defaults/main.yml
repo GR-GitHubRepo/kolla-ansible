@@ -12,6 +12,18 @@ watcher_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "{{ kolla_dev_repos_directory ~ '/watcher/watcher:/var/lib/kolla/venv/lib/python2.7/site-packages/watcher' if watcher_dev_mode | bool else '' }}"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ watcher_api_dimensions }}"
+    haproxy:
+      watcher_api:
+        enabled: "{{ enable_watcher }}"
+        mode: "http"
+        external: false
+        port: "{{ watcher_api_port }}"
+      watcher_api_external:
+        enabled: "{{ enable_watcher }}"
+        mode: "http"
+        external: true
+        port: "{{ watcher_api_port }}"
   watcher-applier:
     container_name: watcher_applier
     group: watcher-applier
@@ -22,6 +34,7 @@ watcher_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "{{ kolla_dev_repos_directory ~ '/watcher/watcher:/var/lib/kolla/venv/lib/python2.7/site-packages/watcher' if watcher_dev_mode | bool else '' }}"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ watcher_applier_dimensions }}"
   watcher-engine:
     container_name: watcher_engine
     group: watcher-engine
@@ -32,6 +45,7 @@ watcher_services:
       - "/etc/localtime:/etc/localtime:ro"
       - "{{ kolla_dev_repos_directory ~ '/watcher/watcher:/var/lib/kolla/venv/lib/python2.7/site-packages/watcher' if watcher_dev_mode | bool else '' }}"
       - "kolla_logs:/var/log/kolla/"
+    dimensions: "{{ watcher_engine_dimensions }}"
 
 
 ####################
@@ -60,6 +74,10 @@ watcher_applier_image: "{{ docker_registry ~ '/' if docker_registry else '' }}{{
 watcher_applier_tag: "{{ watcher_tag }}"
 watcher_applier_image_full: "{{ watcher_applier_image }}:{{ watcher_applier_tag }}"
 
+watcher_api_dimensions: "{{ default_container_dimensions }}"
+watcher_applier_dimensions: "{{ default_container_dimensions }}"
+watcher_engine_dimensions: "{{ default_container_dimensions }}"
+
 ####################
 # OpenStack
 ####################
@@ -80,3 +98,4 @@ openstack_watcher_auth: "{{ openstack_auth }}"
 watcher_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
 watcher_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
 watcher_dev_mode: "{{ kolla_dev_mode }}"
+watcher_source_version: "{{ kolla_source_version }}"

@@ -1,4 +1,17 @@
 ---
+- name: Ensuring config directories exist
+  file:
+    path: "{{ node_config_directory }}/{{ item.key }}"
+    state: "directory"
+    owner: "{{ config_owner_user }}"
+    group: "{{ config_owner_group }}"
+    mode: "0770"
+  become: true
+  when:
+    - inventory_hostname in groups[item.value.group]
+    - item.value.enabled | bool
+  with_dict: "{{ keystone_services }}"
+
 - name: Check if policies shall be overwritten
   local_action: stat path="{{ item }}"
   run_once: True
@@ -20,19 +33,6 @@
   local_action: stat path="{{ node_custom_config }}/keystone/domains"
   run_once: True
   register: keystone_domain_directory
-
-- name: Ensuring config directories exist
-  file:
-    path: "{{ node_config_directory }}/{{ item.key }}"
-    state: "directory"
-    owner: "{{ config_owner_user }}"
-    group: "{{ config_owner_group }}"
-    mode: "0770"
-  become: true
-  when:
-    - inventory_hostname in groups[item.value.group]
-    - item.value.enabled | bool
-  with_dict: "{{ keystone_services }}"
 
 - name: Creating Keystone Domain directory
   vars:
@@ -188,6 +188,7 @@
 - name: Save the returned from cron jobs for building the crontab
   set_fact:
     cron_jobs: "{{ (cron_jobs_json.stdout | from_json).cron_jobs }}"
+  ignore_errors: "{{ ansible_check_mode }}"
   when: keystone_token_provider == 'fernet'
 
 - name: Copying files for keystone-fernet
@@ -199,6 +200,7 @@
     mode: "0660"
   become: true
   register: keystone_fernet_confs
+  ignore_errors: "{{ ansible_check_mode }}"
   with_items:
     - { src: "crontab.j2", dest: "crontab" }
     - { src: "fernet-rotate.sh.j2", dest: "fernet-rotate.sh" }
@@ -237,6 +239,7 @@
     name: "{{ item.value.container_name }}"
     image: "{{ item.value.image }}"
     volumes: "{{ item.value.volumes|reject('equalto', '')|list }}"
+    dimensions: "{{ item.value.dimensions }}"
   when:
     - kolla_action != "config"
     - inventory_hostname in groups[item.value.group]

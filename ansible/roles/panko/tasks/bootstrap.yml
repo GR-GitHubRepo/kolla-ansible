@@ -1,6 +1,6 @@
 ---
 - name: Creating Panko MongoDB database
-  command: docker exec -t mongodb mongo --host {{ panko_database_mongodb_address }} --eval 'db = db.getSiblingDB("{{ panko_database_name }}"); db.createUser({user':' "{{ panko_database_user }}", pwd':' "{{ panko_database_password }}", roles':' [ "readWrite", "dbAdmin" ]})'
+  command: docker exec -t mongodb mongo --host {{ mongodb_replication_set_name }}/{{ panko_database_mongodb_address }} --eval 'db = db.getSiblingDB("{{ panko_database_name }}"); db.createUser({user':' "{{ panko_database_user }}", pwd':' "{{ panko_database_password }}", roles':' [ "readWrite", "dbAdmin" ]})'
   register: mongodb_panko_database
   run_once: true
   changed_when: mongodb_panko_database.stdout.find('already') == -1
@@ -44,7 +44,7 @@
     - not use_preconfigured_databases | bool
     - panko_database_type == "mysql"
 
-- include: bootstrap_service.yml
+- include_tasks: bootstrap_service.yml
   when: (panko_database_type == "mongodb" and mongodb_panko_database.changed)
          or (panko_database_type == "mysql" and mysql_panko_database.changed)
          or use_preconfigured_databases | bool

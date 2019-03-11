@@ -6,8 +6,8 @@
   sysctl: name={{ item.name }} value={{ item.value }} sysctl_set=yes
   with_items:
     - { name: "net.ipv4.ip_forward", value: 1}
-    - { name: "net.ipv4.conf.all.rp_filter", value: 0}
-    - { name: "net.ipv4.conf.default.rp_filter", value: 0}
+    - { name: "net.ipv4.conf.all.rp_filter", value: "{{ neutron_l3_agent_host_rp_filter_mode }}"}
+    - { name: "net.ipv4.conf.default.rp_filter", value: "{{ neutron_l3_agent_host_rp_filter_mode }}"}
   when:
     - set_sysctl | bool
     - (neutron_l3_agent.enabled | bool and neutron_l3_agent.host_in_groups | bool)
@@ -50,10 +50,12 @@
   vars:
     service_name: "{{ item.key }}"
     services_need_neutron_conf:
+      - "ironic-neutron-agent"
       - "neutron-dhcp-agent"
       - "neutron-l3-agent"
       - "neutron-linuxbridge-agent"
       - "neutron-metadata-agent"
+      - "neutron-metering-agent"
       - "neutron-openvswitch-agent"
       - "neutron-openvswitch-agent-xenapi"
       - "neutron-server"
@@ -164,7 +166,7 @@
       - "{{ node_custom_config }}/neutron/{{ service_name }}/ml2_conf.ini"
     dest: "{{ node_config_directory }}/{{ service_name }}/ml2_conf.ini"
     mode: "0660"
-  register: neutron_ml2_confs
+  register: neutron_ml2_xenapi_confs
   when:
     - item.key in services_need_ml2_conf_ini
     - item.value.enabled | bool
@@ -305,6 +307,42 @@
   notify:
     - "Restart {{ service_name }} container"
 
+- name: Copying over metering_agent.ini
+  become: true
+  vars:
+    service_name: "neutron-metering-agent"
+    neutron_metering_agent: "{{ neutron_services[service_name] }}"
+  merge_configs:
+    sources:
+      - "{{ role_path }}/templates/metering_agent.ini.j2"
+      - "{{ node_custom_config }}/neutron/metering_agent.ini"
+    dest: "{{ node_config_directory }}/{{ service_name }}/metering_agent.ini"
+    mode: "0660"
+  register: neutron_metering_agent_ini
+  when:
+    - neutron_metering_agent.enabled | bool
+    - neutron_metering_agent.host_in_groups | bool
+  notify:
+    - "Restart {{ service_name }} container"
+
+- name: Copying over ironic_neutron_agent.ini
+  become: true
+  vars:
+    service_name: "ironic-neutron-agent"
+    ironic_neutron_agent: "{{ neutron_services[service_name] }}"
+  merge_configs:
+    sources:
+      - "{{ role_path }}/templates/ironic_neutron_agent.ini.j2"
+      - "{{ node_custom_config }}/neutron/ironic_neutron_agent.ini"
+    dest: "{{ node_config_directory }}/{{ service_name }}/ironic_neutron_agent.ini"
+    mode: "0660"
+  register: ironic_neutron_agent_ini
+  when:
+    - ironic_neutron_agent.enabled | bool
+    - ironic_neutron_agent.host_in_groups | bool
+  notify:
+    - "Restart {{ service_name }} container"
+
 - name: Copying over bgp_dragent.ini
   become: true
   vars:
@@ -354,6 +392,7 @@
       - "neutron-l3-agent"
       - "neutron-linuxbridge-agent"
       - "neutron-metadata-agent"
+      - "neutron-metering-agent"
       - "neutron-openvswitch-agent"
       - "neutron-openvswitch-agent-xenapi"
       - "neutron-server"
@@ -422,6 +461,7 @@
     image: "{{ item.value.image }}"
     privileged: "{{ item.value.privileged | default(False) }}"
     volumes: "{{ item.value.volumes }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_neutron_containers
   when:
     - kolla_action != "config"

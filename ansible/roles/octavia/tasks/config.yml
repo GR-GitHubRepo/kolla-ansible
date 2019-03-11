@@ -12,6 +12,38 @@
     - item.value.enabled | bool
   with_dict: "{{ octavia_services }}"
 
+- name: Check if policies shall be overwritten
+  local_action: stat path="{{ item }}"
+  run_once: True
+  register: octavia_policy
+  with_first_found:
+    - files: "{{ supported_policy_format_list }}"
+      paths:
+        - "{{ node_custom_config }}/octavia/"
+      skip: true
+
+- name: Set octavia policy file
+  set_fact:
+    octavia_policy_file: "{{ octavia_policy.results.0.stat.path | basename }}"
+    octavia_policy_file_path: "{{ octavia_policy.results.0.stat.path }}"
+  when:
+    - octavia_policy.results
+
+- name: Copying over existing policy file
+  template:
+    src: "{{ octavia_policy_file_path }}"
+    dest: "{{ node_config_directory }}/{{ item.key }}/{{ octavia_policy_file }}"
+    mode: "0660"
+  become: true
+  register: octavia_policy_overwriting
+  when:
+    - octavia_policy_file is defined
+    - inventory_hostname in groups[item.value.group]
+    - item.value.enabled | bool
+  with_dict: "{{ octavia_services }}"
+  notify:
+    - "Restart {{ item.key }} container"
+
 - name: Copying over config.json files for services
   template:
     src: "{{ item.key }}.json.j2"
@@ -72,6 +104,7 @@
   copy:
     src: "{{ node_custom_config }}/octavia/{{ item }}"
     dest: "{{ node_config_directory }}/octavia-housekeeping/{{ item }}"
+  become: true
   register: octavia_housekeeping_certificate
   when:
     - inventory_hostname in groups[service.group]
@@ -89,6 +122,7 @@
   copy:
     src: "{{ node_custom_config }}/octavia/{{ item }}"
     dest: "{{ node_config_directory }}/octavia-health-manager/{{ item }}"
+  become: true
   register: octavia_health_manager_certificate
   when:
     - inventory_hostname in groups[service.group]
@@ -108,6 +142,7 @@
     name: "{{ item.value.container_name }}"
     image: "{{ item.value.image }}"
     volumes: "{{ item.value.volumes }}"
+    dimensions: "{{ item.value.dimensions }}"
   register: check_octavia_containers
   when:
     - kolla_action != "config"

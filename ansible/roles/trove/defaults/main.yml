@@ -11,7 +11,20 @@ trove_services:
       - "{{ node_config_directory }}/trove-api/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/trove/trove:/var/lib/kolla/venv/lib/python2.7/site-packages/trove' if trove_dev_mode | bool else '' }}"
       - "trove:/var/lib/trove/"
+    dimensions: "{{ trove_api_dimensions }}"
+    haproxy:
+      trove_api:
+        enabled: "{{ enable_trove }}"
+        mode: "http"
+        external: false
+        port: "{{ trove_api_port }}"
+      trove_api_external:
+        enabled: "{{ enable_trove }}"
+        mode: "http"
+        external: true
+        port: "{{ trove_api_port }}"
   trove-conductor:
     container_name: trove_conductor
     group: trove-conductor
@@ -21,7 +34,9 @@ trove_services:
       - "{{ node_config_directory }}/trove-conductor/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/trove/trove:/var/lib/kolla/venv/lib/python2.7/site-packages/trove' if trove_dev_mode | bool else '' }}"
       - "trove:/var/lib/trove/"
+    dimensions: "{{ trove_conductor_dimensions }}"
   trove-taskmanager:
     container_name: trove_taskmanager
     group: trove-taskmanager
@@ -31,7 +46,9 @@ trove_services:
       - "{{ node_config_directory }}/trove-taskmanager/:{{ container_config_directory }}/:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "kolla_logs:/var/log/kolla/"
+      - "{{ kolla_dev_repos_directory ~ '/trove/trove:/var/lib/kolla/venv/lib/python2.7/site-packages/trove' if trove_dev_mode | bool else '' }}"
       - "trove:/var/lib/trove/"
+    dimensions: "{{ trove_taskmanager_dimensions }}"
 
 
 ####################
@@ -60,6 +77,10 @@ trove_taskmanager_image: "{{ docker_registry ~ '/' if docker_registry else '' }}
 trove_taskmanager_tag: "{{ trove_tag }}"
 trove_taskmanager_image_full: "{{ trove_taskmanager_image }}:{{ trove_taskmanager_tag }}"
 
+trove_api_dimensions: "{{ default_container_dimensions }}"
+trove_conductor_dimensions: "{{ default_container_dimensions }}"
+trove_taskmanager_dimensions: "{{ default_container_dimensions }}"
+
 
 ####################
 # OpenStack
@@ -73,3 +94,12 @@ trove_logging_debug: "{{ openstack_logging_debug }}"
 trove_keystone_user: "trove"
 
 openstack_trove_auth: "{{ openstack_auth }}"
+
+
+####################
+# Kolla
+####################
+trove_git_repository: "{{ kolla_dev_repos_git }}/{{ project_name }}"
+trove_dev_repos_pull: "{{ kolla_dev_repos_pull }}"
+trove_dev_mode: "{{ kolla_dev_mode }}"
+trove_source_version: "{{ kolla_source_version }}"

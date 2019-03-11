@@ -62,6 +62,7 @@ Kolla-Ansible deploys containers for the following OpenStack projects:
 - `Magnum <https://docs.openstack.org/magnum/latest/>`__
 - `Manila <https://docs.openstack.org/manila/latest/>`__
 - `Mistral <https://docs.openstack.org/mistral/latest/>`__
+- `Monasca <https://docs.openstack.org/monasca-api/latest/>`__
 - `Murano <https://docs.openstack.org/murano/latest/>`__
 - `Neutron <https://docs.openstack.org/neutron/latest/>`__
 - `Nova <https://docs.openstack.org/nova/latest/>`__
@@ -86,20 +87,20 @@ Infrastructure components
 
 Kolla-Ansible deploys containers for the following infrastructure components:
 
-- `Ceph <http://ceph.com/>`__ implementation for Cinder, Glance and Nova.
+- `Ceph <https://ceph.com/>`__ implementation for Cinder, Glance and Nova.
 - `Collectd <https://collectd.org/>`__,
   `Telegraf <https://docs.influxdata.com/telegraf/>`__,
   `InfluxDB <https://influxdata.com/time-series-platform/influxdb/>`__,
   `Prometheus <https://prometheus.io/>`__, and
-  `Grafana <http://grafana.org/>`__ for performance monitoring.
+  `Grafana <https://grafana.org/>`__ for performance monitoring.
 - `Elasticsearch <https://www.elastic.co/de/products/elasticsearch/>`__ and
   `Kibana <https://www.elastic.co/de/products/kibana/>`__ to search, analyze,
   and visualize log messages.
 - `Etcd <https://coreos.com/etcd/>`__ a distributed reliable key-value store.
 - `Fluentd <https://www.fluentd.org/>`__ as an open source data collector
   for unified logging layer.
-- `Gnocchi <http://gnocchi.xyz/>`__ A time-series storage database.
-- `HAProxy <http://www.haproxy.org/>`__ and
+- `Gnocchi <https://gnocchi.xyz/>`__ A time-series storage database.
+- `HAProxy <https://www.haproxy.org/>`__ and
   `Keepalived <http://www.keepalived.org/>`__ for high availability of services
   and their endpoints.
 - `MariaDB and Galera Cluster <https://mariadb.com/kb/en/mariadb/galera-cluster/>`__
@@ -110,6 +111,8 @@ Kolla-Ansible deploys containers for the following infrastructure components:
 - `RabbitMQ <https://www.rabbitmq.com/>`__ as a messaging backend for
   communication between services.
 - `Redis <https://redis.io/>`__ an in-memory data structure store.
+- `Zookeeper <https://zookeeper.apache.org/>`__ an open-source server which enables
+  highly reliable distributed coordination.
 
 Directories
 ===========
@@ -122,10 +125,14 @@ Directories
 -  ``etc`` - Contains a reference etc directory structure which requires
    configuration of a small number of configuration variables to achieve
    a working All-in-One (AIO) deployment.
+-  ``kolla_ansible`` - Contains password generation script.
+-  ``releasenotes`` - Contains releasenote of all features added in
+   Kolla-Ansible.
 -  ``specs`` - Contains the Kolla-Ansible communities key arguments about
    architectural shifts in the code base.
 -  ``tests`` - Contains functional testing tools.
 -  ``tools`` - Contains tools for interacting with Kolla-Ansible.
+-  ``zuul.d`` - Contains project gate job definitions.
 
 Getting Involved
 ================

@@ -14,6 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
+import shlex
+import traceback
+
+import docker
+
+from ansible.module_utils.basic import AnsibleModule
+
 DOCUMENTATION = '''
 ---
 module: kolla_docker
@@ -40,6 +49,7 @@ options:
       - get_container_state
       - pull_image
       - remove_container
+      - remove_image
       - remove_volume
       - recreate_or_restart_container
       - restart_container
@@ -69,6 +79,11 @@ options:
   auth_username:
     description:
       - The username used to authenticate
+    required: False
+    type: str
+  command:
+    description:
+      - The command to execute in the container
     required: False
     type: str
   detach:
@@ -172,6 +187,12 @@ options:
       - running
       - exited
       - paused
+  tty:
+    description:
+      - Allocate TTY to container
+    required: False
+    default: False
+    type: bool
 author: Sam Yaple
 '''
 
@@ -192,18 +213,18 @@ EXAMPLES = '''
         action: pull_image
         image: private-registry.example.com:5000/ubuntu
     - name: Create named volume
+      kolla_docker:
         action: create_volume
         name: name_of_volume
     - name: Remove named volume
+      kolla_docker:
         action: remove_volume
         name: name_of_volume
+    - name: Remove image
+      kolla_docker:
+        action: remove_image
+        image: name_of_image
 '''
-
-import json
-import os
-import traceback
-
-import docker
 
 
 def get_docker_client():
@@ -216,6 +237,8 @@ class DockerWorker(object):
         self.module = module
         self.params = self.module.params
         self.changed = False
+        # Use this to store arguments to pass to exit_json().
+        self.result = {}
 
         # TLS not fully implemented
         # tls_config = self.generate_tls()
@@ -301,7 +324,9 @@ class DockerWorker(object):
             self.compare_volumes(container_info) or
             self.compare_volumes_from(container_info) or
             self.compare_environment(container_info) or
-            self.compare_container_state(container_info)
+            self.compare_container_state(container_info) or
+            self.compare_dimensions(container_info) or
+            self.compare_command(container_info)
         )
 
     def compare_ipc_mode(self, container_info):
@@ -438,6 +463,63 @@ class DockerWorker(object):
         if new_state != current_state:
             return True
 
+    def compare_dimensions(self, container_info):
+        new_dimensions = self.params.get('dimensions')
+        # NOTE(mgoddard): The names used by Docker are inconsisent between
+        # configuration of a container's resources and the resources in
+        # container_info['HostConfig']. This provides a mapping between the
+        # two.
+        dimension_map = {
+            'mem_limit': 'Memory', 'mem_reservation': 'MemoryReservation',
+            'memswap_limit': 'MemorySwap', 'cpu_period': 'CpuPeriod',
+            'cpu_quota': 'CpuQuota', 'cpu_shares': 'CpuShares',
+            'cpuset_cpus': 'CpusetCpus', 'cpuset_mems': 'CpusetMems',
+            'kernel_memory': 'KernelMemory', 'blkio_weight': 'BlkioWeight',
+            'ulimits': 'Ulimits'}
+        unsupported = set(new_dimensions.keys()) - \
+            set(dimension_map.keys())
+        if unsupported:
+            self.module.exit_json(
+                failed=True, msg=repr("Unsupported dimensions"),
+                unsupported_dimensions=unsupported)
+        current_dimensions = container_info['HostConfig']
+        for key1, key2 in dimension_map.items():
+            # NOTE(mgoddard): If a resource has been explicitly requested,
+            # check for a match. Otherwise, ensure is is set to the default.
+            if key1 in new_dimensions:
+                if key1 == 'ulimits':
+                    if self.compare_ulimits(new_dimensions[key1],
+                                            current_dimensions[key2]):
+                        return True
+                elif new_dimensions[key1] != current_dimensions[key2]:
+                    return True
+            elif current_dimensions[key2]:
+                # The default values of all currently supported resources are
+                # '' or 0 - both falsey.
+                return True
+
+    def compare_ulimits(self, new_ulimits, current_ulimits):
+        # The new_ulimits is dict, we need make it to a list of Ulimit
+        # instance.
+        new_ulimits = self.build_ulimits(new_ulimits)
+
+        def key(ulimit):
+            return ulimit['Name']
+
+        if current_ulimits is None:
+            current_ulimits = []
+        return sorted(new_ulimits, key=key) != sorted(current_ulimits, key=key)
+
+    def compare_command(self, container_info):
+        new_command = self.params.get('command')
+        if new_command is not None:
+            new_command_split = shlex.split(new_command)
+            new_path = new_command_split[0]
+            new_args = new_command_split[1:]
+            if (new_path != container_info['Path'] or
+                    new_args != container_info['Args']):
+                return True
+
     def parse_image(self):
         full_image = self.params.get('image')
 
@@ -541,6 +623,40 @@ class DockerWorker(object):
 
         return vol_list, vol_dict
 
+    def parse_dimensions(self, dimensions):
+        # When the data object contains types such as
+        # docker.types.Ulimit, Ansible will fail when these are
+        # returned via exit_json or fail_json. HostConfig is derived from dict,
+        # but its constructor requires additional arguments.
+        # to avoid that, here do copy the dimensions and return a new one.
+        dimensions = dimensions.copy()
+
+        supported = {'cpu_period', 'cpu_quota', 'cpu_shares',
+                     'cpuset_cpus', 'cpuset_mems', 'mem_limit',
+                     'mem_reservation', 'memswap_limit',
+                     'kernel_memory', 'blkio_weight', 'ulimits'}
+        unsupported = set(dimensions) - supported
+        if unsupported:
+            self.module.exit_json(failed=True,
+                                  msg=repr("Unsupported dimensions"),
+                                  unsupported_dimensions=unsupported)
+
+        ulimits = dimensions.get('ulimits')
+        if ulimits:
+            dimensions['ulimits'] = self.build_ulimits(ulimits)
+
+        return dimensions
+
+    def build_ulimits(self, ulimits):
+        ulimits_opt = []
+        for key, value in ulimits.items():
+            soft = value.get('soft')
+            hard = value.get('hard')
+            ulimits_opt.append(docker.types.Ulimit(name=key,
+                                                   soft=soft,
+                                                   hard=hard))
+        return ulimits_opt
+
     def build_host_config(self, binds):
         options = {
             'network_mode': 'host',
@@ -551,6 +667,12 @@ class DockerWorker(object):
             'privileged': self.params.get('privileged'),
             'volumes_from': self.params.get('volumes_from')
         }
+
+        dimensions = self.params.get('dimensions')
+
+        if dimensions:
+            dimensions = self.parse_dimensions(dimensions)
+            options.update(dimensions)
 
         if self.params.get('restart_policy') in ['on-failure',
                                                  'always',
@@ -582,6 +704,7 @@ class DockerWorker(object):
     def build_container_options(self):
         volumes, binds = self.generate_volumes()
         return {
+            'command': self.params.get('command'),
             'detach': self.params.get('detach'),
             'environment': self._format_env_vars(),
             'host_config': self.build_host_config(binds),
@@ -589,7 +712,7 @@ class DockerWorker(object):
             'image': self.params.get('image'),
             'name': self.params.get('name'),
             'volumes': volumes,
-            'tty': True
+            'tty': self.params.get('tty'),
         }
 
     def create_container(self):
@@ -641,15 +764,22 @@ class DockerWorker(object):
             # dict all the time.
             if isinstance(rc, dict):
                 rc = rc['StatusCode']
-            if rc != 0:
-                self.module.fail_json(
-                    failed=True,
-                    changed=True,
-                    msg="Container exited with non-zero return code %s" % rc
-                )
+            # Include container's return code, standard output and error in the
+            # result.
+            self.result['rc'] = rc
+            self.result['stdout'] = self.dc.logs(self.params.get('name'),
+                                                 stdout=True, stderr=False)
+            self.result['stderr'] = self.dc.logs(self.params.get('name'),
+                                                 stdout=False, stderr=True)
             if self.params.get('remove_on_exit'):
                 self.stop_container()
                 self.remove_container()
+            if rc != 0:
+                self.module.fail_json(
+                    changed=True,
+                    msg="Container exited with non-zero return code %s" % rc,
+                    **self.result
+                )
 
     def get_container_env(self):
         name = self.params.get('name')
@@ -722,6 +852,26 @@ class DockerWorker(object):
                     )
                 raise
 
+    def remove_image(self):
+        if self.check_image():
+            self.changed = True
+            try:
+                self.dc.remove_image(image=self.params.get('image'))
+            except docker.errors.APIError as e:
+                if e.response.status_code == 409:
+                    self.module.fail_json(
+                        failed=True,
+                        msg="Image '{}' is currently in-use".format(
+                            self.params.get('image')
+                        )
+                    )
+                elif e.response.status_code == 500:
+                    self.module.fail_json(
+                        failed=True,
+                        msg="Server error"
+                    )
+                raise
+
 
 def generate_module():
     # NOTE(jeffrey4l): add empty string '' to choices let us use
@@ -733,14 +883,15 @@ def generate_module():
                              'create_volume', 'get_container_env',
                              'get_container_state', 'pull_image',
                              'recreate_or_restart_container',
-                             'remove_container', 'remove_volume',
-                             'restart_container', 'start_container',
-                             'stop_container']),
+                             'remove_container', 'remove_image',
+                             'remove_volume', 'restart_container',
+                             'start_container', 'stop_container']),
         api_version=dict(required=False, type='str', default='auto'),
         auth_email=dict(required=False, type='str'),
         auth_password=dict(required=False, type='str', no_log=True),
         auth_registry=dict(required=False, type='str'),
         auth_username=dict(required=False, type='str'),
+        command=dict(required=False, type='str'),
         detach=dict(required=False, type='bool', default=True),
         labels=dict(required=False, type='dict', default=dict()),
         name=dict(required=False, type='str'),
@@ -772,7 +923,9 @@ def generate_module():
         tls_key=dict(required=False, type='str'),
         tls_cacert=dict(required=False, type='str'),
         volumes=dict(required=False, type='list'),
-        volumes_from=dict(required=False, type='list')
+        volumes_from=dict(required=False, type='list'),
+        dimensions=dict(required=False, type='dict', default=dict()),
+        tty=dict(required=False, type='bool', default=False),
     )
     required_if = [
         ['action', 'pull_image', ['image']],
@@ -784,6 +937,7 @@ def generate_module():
         ['action', 'get_container_state', ['name']],
         ['action', 'recreate_or_restart_container', ['name']],
         ['action', 'remove_container', ['name']],
+        ['action', 'remove_image', ['image']],
         ['action', 'remove_volume', ['name']],
         ['action', 'restart_container', ['name']],
         ['action', 'stop_container', ['name']]
@@ -826,12 +980,11 @@ def main():
         # types. If we ever add method that will have to return some
         # meaningful data, we need to refactor all methods to return dicts.
         result = bool(getattr(dw, module.params.get('action'))())
-        module.exit_json(changed=dw.changed, result=result)
+        module.exit_json(changed=dw.changed, result=result, **dw.result)
     except Exception:
-        module.exit_json(failed=True, changed=True,
-                         msg=repr(traceback.format_exc()))
+        module.fail_json(changed=True, msg=repr(traceback.format_exc()),
+                         **dw.result)
 
-# import module snippets
-from ansible.module_utils.basic import *  # noqa
+
 if __name__ == '__main__':
     main()
